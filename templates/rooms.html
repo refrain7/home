@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+{% block title %}房间管理 - 民宿房间管理系统{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>🚪 房间管理</h1>
+    <button class="btn btn-primary" onclick="showRoomForm()">+ 新增房间</button>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="filter-bar">
+            <input type="text" id="searchKeyword" placeholder="🔍 搜索房间号..." oninput="loadRooms()" />
+            <select id="filterStatus" onchange="loadRooms()">
+                <option value="">全部状态</option>
+                <option value="available">空闲</option>
+                <option value="occupied">已入住</option>
+                <option value="reserved">已预订</option>
+                <option value="cleaning">打扫中</option>
+                <option value="maintenance">维修中</option>
+            </select>
+            <select id="filterType" onchange="loadRooms()">
+                <option value="">全部房型</option>
+            </select>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="room-grid" id="roomGrid">
+            <p class="text-center text-muted">加载中...</p>
+        </div>
+        <div class="pagination" id="roomPagination"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+let roomTypes = [];
+
+document.addEventListener('DOMContentLoaded', async () => {
+    // 加载房型下拉
+    const res = await fetch('/api/room-types?page=1&keyword=');
+    const json = await res.json();
+    if (json.success && json.data) {
+        roomTypes = json.data.items;
+        const sel = document.getElementById('filterType');
+        roomTypes.forEach(t => {
+            sel.innerHTML += `<option value="${t.id}">${escHtml(t.name)}</option>`;
+        });
+    }
+    loadRooms();
+});
+
+async function loadRooms() {
+    const keyword = document.getElementById('searchKeyword').value;
+    const status = document.getElementById('filterStatus').value;
+    const typeId = document.getElementById('filterType').value;
+    const res = await fetch(`/api/rooms?keyword=${encodeURIComponent(keyword)}&status=${status}&room_type_id=${typeId}&page=${currentPage}`);
+    const json = await res.json();
+    if (!json.success) return;
+
+    const data = json.data;
+    let html = '';
+    if (data.items.length === 0) {
+        html = '<p class="text-center text-muted" style="grid-column:1/-1;">暂无房间数据</p>';
+    } else {
+        data.items.forEach(r => {
+            const statusMap = {available:'空闲', occupied:'已入住', reserved:'已预订', cleaning:'打扫中', maintenance:'维修中', blocked:'已锁定'};
+            const statusClass = {available:'status-available', occupied:'status-occupied', reserved:'status-reserved', cleaning:'status-cleaning', maintenance:'status-maintenance', blocked:'status-blocked'};
+            html += `
+                <div class="room-card ${statusClass[r.status] || ''}">
+                    <div class="room-card-header">
+                        <span class="room-number">${escHtml(r.room_number)}</span>
+                        <span class="room-status">${statusMap[r.status] || r.status}</span>
+                    </div>
+                    <div class="room-card-body">
+                        <div class="room-info"><span>房型:</span> ${escHtml(r.room_type_name || '未知')}</div>
+                        <div class="room-info"><span>楼层:</span> ${escHtml(r.floor || '-')}</div>
+                        <div class="room-info"><span>备注:</span> ${escHtml(r.notes || '-')}</div>
+                    </div>
+                    <div class="room-card-footer">
+                        <button class="btn btn-sm btn-outline" onclick="editRoom(${r.id})">编辑</button>
+                        <button class="btn btn-sm btn-outline" onclick="quickStatus(${r.id}, '${r.status}')">状态</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteRoom(${r.id}, '${escHtml(r.room_number)}')">删除</button>
+                    </div>
+                </div>`;
+        });
+    }
+    document.getElementById('roomGrid').innerHTML = html;
+    renderPagination('roomPagination', data, loadRooms);
+}
+
+function showRoomForm(data = null) {
+    const isEdit = data !== null;
+    document.getElementById('modalTitle').textContent = isEdit ? '编辑房间' : '新增房间';
+
+    let typeOptions = roomTypes.map(t =>
+        `<option value="${t.id}" ${data && data.room_type_id === t.id ? 'selected' : ''}>${escHtml(t.name)}</option>`
+    ).join('');
+
+    let statusOptions = '';
+    const statusMap = {available:'空闲', occupied:'已入住', reserved:'已预订', cleaning:'打扫中', maintenance:'维修中', blocked:'已锁定'};
+    for (const [k, v] of Object.entries(statusMap)) {
+        statusOptions += `<option value="${k}" ${data && data.status === k ? 'selected' : ''}>${v}</option>`;
+    }
+
+    document.getElementById('modalBody').innerHTML = `
+        <form id="roomForm">
+            <input type="hidden" id="roomId" value="${data ? data.id : ''}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>房间号 <span class="required">*</span></label>
+                    <input type="text" id="roomNumber" class="form-control" value="${data ? escHtml(data.room_number) : ''}" required>
+                </div>
+                <div class="form-group">
+                    <label>所属房型 <span class="required">*</span></label>
+                    <select id="roomTypeId" class="form-control">${typeOptions}</select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>楼层</label>
+                    <input type="text" id="roomFloor" class="form-control" value="${data ? escHtml(data.floor || '') : ''}">
+                </div>
+                <div class="form-group">
+                    <label>状态</label>
+                    <select id="roomStatus" class="form-control">${statusOptions}</select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>备注</label>
+                <textarea id="roomNotes" class="form-control" rows="2">${data ? escHtml(data.notes || '') : ''}</textarea>
+            </div>
+        </form>`;
+
+    document.getElementById('modalFooter').innerHTML = `
+        <button class="btn btn-outline" onclick="closeModal()">取消</button>
+        <button class="btn btn-primary" onclick="saveRoom()">${isEdit ? '保存' : '确认新增'}</button>`;
+    openModal();
+}
+
+async function saveRoom() {
+    const id = document.getElementById('roomId').value;
+    const number = document.getElementById('roomNumber').value.trim();
+    if (!number) { showToast('请输入房间号', 'error'); return; }
+
+    const data = {
+        room_number: number,
+        room_type_id: parseInt(document.getElementById('roomTypeId').value),
+        floor: document.getElementById('roomFloor').value.trim(),
+        status: document.getElementById('roomStatus').value,
+        notes: document.getElementById('roomNotes').value.trim(),
+    };
+
+    const url = id ? `/api/rooms/${id}` : '/api/rooms';
+    const method = id ? 'PUT' : 'POST';
+    const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+    const json = await res.json();
+    if (json.success) {
+        closeModal(); loadRooms();
+        showToast(id ? '房间已更新' : '房间已新增', 'success');
+    } else {
+        showToast(json.error || '操作失败', 'error');
+    }
+}
+
+async function editRoom(id) {
+    const res = await fetch(`/api/rooms/${id}`);
+    const json = await res.json();
+    if (json.success) showRoomForm(json.data);
+}
+
+async function quickStatus(id, currentStatus) {
+    const statusMap = {available:'空闲', occupied:'已入住', reserved:'已预订', cleaning:'打扫中', maintenance:'维修中', blocked:'已锁定'};
+    const options = Object.entries(statusMap).map(([k, v]) =>
+        `<option value="${k}" ${k === currentStatus ? 'selected' : ''}>${v}</option>`
+    ).join('');
+
+    document.getElementById('modalTitle').textContent = '快速更改状态';
+    document.getElementById('modalBody').innerHTML = `
+        <div class="form-group">
+            <label>选择新状态</label>
+            <select id="quickStatusSelect" class="form-control">${options}</select>
+        </div>`;
+    document.getElementById('modalFooter').innerHTML = `
+        <button class="btn btn-outline" onclick="closeModal()">取消</button>
+        <button class="btn btn-primary" onclick="updateRoomStatus(${id})">确认</button>`;
+    openModal();
+}
+
+async function updateRoomStatus(id) {
+    const newStatus = document.getElementById('quickStatusSelect').value;
+    const res = await fetch(`/api/rooms/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ room_number: '', room_type_id: 0, floor: '', status: newStatus, notes: '' })
+    });
+    // Actually we need full data - let's get current room first
+    const getRes = await fetch(`/api/rooms/${id}`);
+    const roomData = await getRes.json();
+    if (roomData.success) {
+        const r = roomData.data;
+        const updateRes = await fetch(`/api/rooms/${id}`, {
+            method: 'PUT',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({
+                room_number: r.room_number,
+                room_type_id: r.room_type_id,
+                floor: r.floor || '',
+                status: newStatus,
+                notes: r.notes || ''
+            })
+        });
+        const updateJson = await updateRes.json();
+        if (updateJson.success) {
+            closeModal(); loadRooms();
+            showToast('状态已更新', 'success');
+        } else {
+            showToast(updateJson.error || '更新失败', 'error');
+        }
+    }
+}
+
+async function deleteRoom(id, number) {
+    if (!confirm(`确定要删除房间 "${number}" 吗？`)) return;
+    const res = await fetch(`/api/rooms/${id}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (json.success) { loadRooms(); showToast('房间已删除', 'success'); }
+    else { showToast(json.error || '删除失败', 'error'); }
+}
+</script>
+{% endblock %}

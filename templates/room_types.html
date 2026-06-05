@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% block title %}房型管理 - 民宿房间管理系统{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>🏠 房型管理</h1>
+    <button class="btn btn-primary" onclick="showTypeForm()">+ 新增房型</button>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="filter-bar">
+            <input type="text" id="searchKeyword" placeholder="🔍 搜索房型名称、描述..." oninput="loadTypes()" />
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>房型名称</th>
+                        <th>基础价格</th>
+                        <th>周末价格</th>
+                        <th>容纳人数</th>
+                        <th>面积</th>
+                        <th>床型</th>
+                        <th>设施</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="typeTableBody">
+                    <tr><td colspan="10" class="text-center text-muted">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination" id="typePagination"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+
+document.addEventListener('DOMContentLoaded', () => loadTypes());
+
+async function loadTypes() {
+    const keyword = document.getElementById('searchKeyword').value;
+    const res = await fetch(`/api/room-types?keyword=${encodeURIComponent(keyword)}&page=${currentPage}`);
+    const json = await res.json();
+    if (!json.success) return;
+
+    const data = json.data;
+    let html = '';
+    if (data.items.length === 0) {
+        html = '<tr><td colspan="10" class="text-center text-muted">暂无房型数据</td></tr>';
+    } else {
+        data.items.forEach(t => {
+            html += `
+                <tr>
+                    <td>${t.id}</td>
+                    <td><strong>${escHtml(t.name)}</strong></td>
+                    <td>¥${t.base_price.toFixed(2)}</td>
+                    <td>${t.weekend_price ? '¥' + t.weekend_price.toFixed(2) : '-'}</td>
+                    <td>${t.capacity}人</td>
+                    <td>${escHtml(t.area || '-')}</td>
+                    <td>${escHtml(t.bed_type || '-')}</td>
+                    <td><small>${escHtml((t.amenities || '').substring(0, 30))}${(t.amenities||'').length > 30 ? '...' : ''}</small></td>
+                    <td><small>${t.created_at}</small></td>
+                    <td class="action-cell">
+                        <button class="btn btn-sm btn-outline" onclick="editType(${t.id})">编辑</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteType(${t.id}, '${escHtml(t.name)}')">删除</button>
+                    </td>
+                </tr>`;
+        });
+    }
+    document.getElementById('typeTableBody').innerHTML = html;
+    renderPagination('typePagination', data, loadTypes);
+}
+
+function showTypeForm(data = null) {
+    const isEdit = data !== null;
+    document.getElementById('modalTitle').textContent = isEdit ? '编辑房型' : '新增房型';
+    document.getElementById('modalBody').innerHTML = `
+        <form id="typeForm">
+            <input type="hidden" id="typeId" value="${data ? data.id : ''}">
+            <div class="form-group">
+                <label>房型名称 <span class="required">*</span></label>
+                <input type="text" id="typeName" class="form-control" value="${data ? escHtml(data.name) : ''}" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>基础价格 <span class="required">*</span></label>
+                    <input type="number" id="typeBasePrice" class="form-control" step="0.01" value="${data ? data.base_price : ''}" required>
+                </div>
+                <div class="form-group">
+                    <label>周末价格</label>
+                    <input type="number" id="typeWeekendPrice" class="form-control" step="0.01" value="${data ? data.weekend_price || '' : ''}">
+                </div>
+                <div class="form-group">
+                    <label>节假日价格</label>
+                    <input type="number" id="typeHolidayPrice" class="form-control" step="0.01" value="${data ? data.holiday_price || '' : ''}">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>容纳人数</label>
+                    <input type="number" id="typeCapacity" class="form-control" value="${data ? data.capacity : 2}">
+                </div>
+                <div class="form-group">
+                    <label>面积</label>
+                    <input type="text" id="typeArea" class="form-control" value="${data ? escHtml(data.area || '') : ''}" placeholder="如: 30㎡">
+                </div>
+                <div class="form-group">
+                    <label>床型</label>
+                    <input type="text" id="typeBedType" class="form-control" value="${data ? escHtml(data.bed_type || '') : ''}" placeholder="如: 大床1.8m">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>描述</label>
+                <textarea id="typeDesc" class="form-control" rows="3">${data ? escHtml(data.description || '') : ''}</textarea>
+            </div>
+            <div class="form-group">
+                <label>设施</label>
+                <textarea id="typeAmenities" class="form-control" rows="2" placeholder="如: WiFi,空调,电视,独立卫浴">${data ? escHtml(data.amenities || '') : ''}</textarea>
+            </div>
+            <div class="form-group">
+                <label>房型图片</label>
+                <div class="image-upload-area" id="typeImages">
+                    ${(data && data.images) ? data.images.map(img => `
+                        <div class="image-thumb">
+                            <img src="/static/${img}" alt="">
+                            <button type="button" class="image-remove" onclick="this.parentElement.remove()">✕</button>
+                            <input type="hidden" name="typeImages" value="${img}">
+                        </div>`).join('') : ''}
+                    <label class="image-add-btn">
+                        <input type="file" accept="image/*" onchange="uploadTypeImage(this)" style="display:none">
+                        <span>+ 添加图片</span>
+                    </label>
+                </div>
+            </div>
+        </form>`;
+    document.getElementById('modalFooter').innerHTML = `
+        <button class="btn btn-outline" onclick="closeModal()">取消</button>
+        <button class="btn btn-primary" onclick="saveType()">${isEdit ? '保存修改' : '确认新增'}</button>`;
+    openModal();
+}
+
+async function uploadTypeImage(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('subfolder', 'room_types');
+    try {
+        const res = await fetch('/api/upload/room_types', { method: 'POST', body: formData });
+        const json = await res.json();
+        if (json.success) {
+            const container = document.getElementById('typeImages');
+            const div = document.createElement('div');
+            div.className = 'image-thumb';
+            div.innerHTML = `
+                <img src="/static/${json.path}" alt="">
+                <button type="button" class="image-remove" onclick="this.parentElement.remove()">✕</button>
+                <input type="hidden" name="typeImages" value="${json.path}">`;
+            container.insertBefore(div, input.parentElement);
+            showToast('图片上传成功', 'success');
+        } else {
+            showToast(json.error || '上传失败', 'error');
+        }
+    } catch(e) {
+        showToast('上传失败: ' + e.message, 'error');
+    }
+    input.value = '';
+}
+
+async function saveType() {
+    const id = document.getElementById('typeId').value;
+    const name = document.getElementById('typeName').value.trim();
+    if (!name) { showToast('请输入房型名称', 'error'); return; }
+
+    const imageInputs = document.querySelectorAll('input[name="typeImages"]');
+    const images = Array.from(imageInputs).map(i => i.value);
+
+    const data = {
+        name, images,
+        description: document.getElementById('typeDesc').value.trim(),
+        base_price: parseFloat(document.getElementById('typeBasePrice').value) || 0,
+        weekend_price: parseFloat(document.getElementById('typeWeekendPrice').value) || 0,
+        holiday_price: parseFloat(document.getElementById('typeHolidayPrice').value) || 0,
+        capacity: parseInt(document.getElementById('typeCapacity').value) || 1,
+        area: document.getElementById('typeArea').value.trim(),
+        bed_type: document.getElementById('typeBedType').value.trim(),
+        amenities: document.getElementById('typeAmenities').value.trim(),
+    };
+
+    const url = id ? `/api/room-types/${id}` : '/api/room-types';
+    const method = id ? 'PUT' : 'POST';
+
+    try {
+        const res = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const json = await res.json();
+        if (json.success) {
+            closeModal();
+            loadTypes();
+            showToast(id ? '房型已更新' : '房型已新增', 'success');
+        } else {
+            showToast(json.error || '操作失败', 'error');
+        }
+    } catch(e) {
+        showToast('操作失败: ' + e.message, 'error');
+    }
+}
+
+async function editType(id) {
+    const res = await fetch(`/api/room-types/${id}`);
+    const json = await res.json();
+    if (json.success) showTypeForm(json.data);
+}
+
+async function deleteType(id, name) {
+    if (!confirm(`确定要删除房型 "${name}" 吗？\n注意：删除前请确保该房型下没有房间。`)) return;
+    const res = await fetch(`/api/room-types/${id}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (json.success) {
+        loadTypes();
+        showToast('房型已删除', 'success');
+    } else {
+        showToast(json.error || '删除失败', 'error');
+    }
+}
+</script>
+{% endblock %}

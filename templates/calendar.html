@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}日历视图 - 民宿房间管理系统{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>📅 日历视图</h1>
+    <div class="calendar-nav">
+        <button class="btn btn-outline" onclick="prevMonth()">◀ 上月</button>
+        <h2 id="calendarTitle"></h2>
+        <button class="btn btn-outline" onclick="nextMonth()">下月 ▶</button>
+        <button class="btn btn-outline" onclick="goToday()">今天</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body" style="overflow-x:auto;">
+        <div id="calendarContainer">
+            <p class="text-center text-muted">加载中...</p>
+        </div>
+    </div>
+</div>
+
+<!-- 图例 -->
+<div class="card" style="margin-top:16px;">
+    <div class="card-header"><h3>图例</h3></div>
+    <div class="card-body">
+        <div class="legend">
+            <span class="legend-item"><span class="legend-color" style="background:#f59e0b;"></span> 待确认</span>
+            <span class="legend-item"><span class="legend-color" style="background:#3b82f6;"></span> 已确认</span>
+            <span class="legend-item"><span class="legend-color" style="background:#10b981;"></span> 已入住</span>
+            <span class="legend-item"><span class="legend-color" style="background:#6b7280;"></span> 已退房</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentYear, currentMonth;
+let eventsData = [];
+let roomsData = [];
+
+document.addEventListener('DOMContentLoaded', () => {
+    const now = new Date();
+    currentYear = now.getFullYear();
+    currentMonth = now.getMonth() + 1;
+    loadCalendar();
+});
+
+async function loadCalendar() {
+    document.getElementById('calendarTitle').textContent = `${currentYear}年 ${currentMonth}月`;
+    const res = await fetch(`/api/calendar-data?year=${currentYear}&month=${currentMonth}`);
+    const json = await res.json();
+    if (!json.success) return;
+
+    eventsData = json.data.events;
+    roomsData = json.data.rooms;
+    renderCalendar();
+}
+
+function renderCalendar() {
+    const firstDay = new Date(currentYear, currentMonth - 1, 1);
+    const lastDay = new Date(currentYear, currentMonth, 0);
+    const startDayOfWeek = firstDay.getDay(); // 0=周日
+    const daysInMonth = lastDay.getDate();
+
+    // 按房间分组事件
+    const roomEvents = {};
+    eventsData.forEach(e => {
+        if (!roomEvents[e.room_id]) roomEvents[e.room_id] = [];
+        roomEvents[e.room_id].push(e);
+    });
+
+    let html = '<table class="calendar-table"><thead><tr><th class="room-col">房间</th>';
+    // 日期表头
+    for (let d = 1; d <= daysInMonth; d++) {
+        const date = new Date(currentYear, currentMonth - 1, d);
+        const dayOfWeek = date.getDay();
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        const isToday = date.toDateString() === new Date().toDateString();
+        html += `<th class="day-col ${isWeekend ? 'weekend' : ''} ${isToday ? 'today' : ''}">
+            <div class="day-num">${d}</div>
+            <div class="day-week">${['日','一','二','三','四','五','六'][dayOfWeek]}</div>
+        </th>`;
+    }
+    html += '</tr></thead><tbody>';
+
+    // 每个房间一行
+    roomsData.forEach(room => {
+        html += `<tr><td class="room-col"><strong>${escHtml(room.room_number)}</strong><br><small>${escHtml(room.floor || '')}</small></td>`;
+
+        const events = roomEvents[room.id] || [];
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${currentYear}-${String(currentMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            // 查找当天的预订
+            const dayEvents = events.filter(e => e.start <= dateStr && e.end > dateStr);
+
+            let cellClass = '';
+            let cellTitle = '';
+            if (dayEvents.length > 0) {
+                cellClass = 'has-booking';
+                cellTitle = dayEvents.map(e => e.title).join(', ');
+            }
+
+            html += `<td class="day-cell ${cellClass}" title="${cellTitle}">`;
+            dayEvents.forEach(e => {
+                const isStart = e.start === dateStr;
+                const isEnd = e.end === dateStr;
+                html += `<div class="booking-bar" style="background:${e.color};" title="${escHtml(e.title)}">
+                    ${isStart ? escHtml(e.title.substring(0,2)) : ''}
+                </div>`;
+            });
+            html += '</td>';
+        }
+        html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    document.getElementById('calendarContainer').innerHTML = html;
+}
+
+function prevMonth() {
+    if (currentMonth === 1) { currentMonth = 12; currentYear--; }
+    else { currentMonth--; }
+    loadCalendar();
+}
+
+function nextMonth() {
+    if (currentMonth === 12) { currentMonth = 1; currentYear++; }
+    else { currentMonth++; }
+    loadCalendar();
+}
+
+function goToday() {
+    const now = new Date();
+    currentYear = now.getFullYear();
+    currentMonth = now.getMonth() + 1;
+    loadCalendar();
+}
+</script>
+{% endblock %}

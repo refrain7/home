@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}客人管理 - 民宿房间管理系统{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>👤 客人管理</h1>
+    <button class="btn btn-primary" onclick="showGuestForm()">+ 新增客人</button>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="filter-bar">
+            <input type="text" id="searchKeyword" placeholder="🔍 搜索姓名、手机号、身份证..." oninput="loadGuests()" />
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>姓名</th>
+                        <th>手机号</th>
+                        <th>身份证号</th>
+                        <th>性别</th>
+                        <th>国籍</th>
+                        <th>预订次数</th>
+                        <th>最近入住</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="guestTableBody">
+                    <tr><td colspan="10" class="text-center text-muted">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination" id="guestPagination"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+
+document.addEventListener('DOMContentLoaded', () => loadGuests());
+
+async function loadGuests() {
+    const keyword = document.getElementById('searchKeyword').value;
+    const res = await fetch(`/api/guests?keyword=${encodeURIComponent(keyword)}&page=${currentPage}`);
+    const json = await res.json();
+    if (!json.success) return;
+
+    const data = json.data;
+    let html = '';
+    if (data.items.length === 0) {
+        html = '<tr><td colspan="10" class="text-center text-muted">暂无客人数据</td></tr>';
+    } else {
+        data.items.forEach(g => {
+            const lastDate = g.last_booking ? g.last_booking.check_in_date : '-';
+            const genderText = g.gender === 'male' ? '男' : g.gender === 'female' ? '女' : '-';
+            html += `
+                <tr>
+                    <td>${g.id}</td>
+                    <td><strong>${escHtml(g.name)}</strong></td>
+                    <td>${escHtml(g.phone || '-')}</td>
+                    <td>${escHtml((g.id_card || '').substring(0, 6) + '...' || '-')}</td>
+                    <td>${genderText}</td>
+                    <td>${escHtml(g.nationality || '-')}</td>
+                    <td><span class="badge badge-info">${g.booking_count || 0}次</span></td>
+                    <td>${lastDate}</td>
+                    <td><small>${g.created_at}</small></td>
+                    <td class="action-cell">
+                        <button class="btn btn-sm btn-outline" onclick="viewGuest(${g.id})">详情</button>
+                        <button class="btn btn-sm btn-outline" onclick="editGuest(${g.id})">编辑</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteGuest(${g.id}, '${escHtml(g.name)}')">删除</button>
+                    </td>
+                </tr>`;
+        });
+    }
+    document.getElementById('guestTableBody').innerHTML = html;
+    renderPagination('guestPagination', data, loadGuests);
+}
+
+function showGuestForm(data = null) {
+    const isEdit = data !== null;
+    document.getElementById('modalTitle').textContent = isEdit ? '编辑客人' : '新增客人';
+    document.getElementById('modalBody').innerHTML = `
+        <form id="guestForm">
+            <input type="hidden" id="guestId" value="${data ? data.id : ''}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>姓名 <span class="required">*</span></label>
+                    <input type="text" id="guestName" class="form-control" value="${data ? escHtml(data.name) : ''}" required>
+                </div>
+                <div class="form-group">
+                    <label>性别</label>
+                    <select id="guestGender" class="form-control">
+                        <option value="">未知</option>
+                        <option value="male" ${data && data.gender === 'male' ? 'selected' : ''}>男</option>
+                        <option value="female" ${data && data.gender === 'female' ? 'selected' : ''}>女</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>手机号</label>
+                    <input type="text" id="guestPhone" class="form-control" value="${data ? escHtml(data.phone || '') : ''}">
+                </div>
+                <div class="form-group">
+                    <label>身份证号</label>
+                    <input type="text" id="guestIdCard" class="form-control" value="${data ? escHtml(data.id_card || '') : ''}">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>国籍</label>
+                    <input type="text" id="guestNationality" class="form-control" value="${data ? escHtml(data.nationality || '') : ''}" placeholder="如: 中国">
+                </div>
+                <div class="form-group">
+                    <label>出生日期</label>
+                    <input type="date" id="guestBirthday" class="form-control" value="${data ? data.birthday || '' : ''}">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>邮箱</label>
+                    <input type="email" id="guestEmail" class="form-control" value="${data ? escHtml(data.email || '') : ''}">
+                </div>
+                <div class="form-group">
+                    <label>地址</label>
+                    <input type="text" id="guestAddress" class="form-control" value="${data ? escHtml(data.address || '') : ''}">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>备注</label>
+                <textarea id="guestNotes" class="form-control" rows="2">${data ? escHtml(data.notes || '') : ''}</textarea>
+            </div>
+        </form>`;
+    document.getElementById('modalFooter').innerHTML = `
+        <button class="btn btn-outline" onclick="closeModal()">取消</button>
+        <button class="btn btn-primary" onclick="saveGuest()">${isEdit ? '保存' : '确认新增'}</button>`;
+    openModal();
+}
+
+async function saveGuest() {
+    const id = document.getElementById('guestId').value;
+    const name = document.getElementById('guestName').value.trim();
+    if (!name) { showToast('请输入姓名', 'error'); return; }
+    const data = {
+        name, phone: document.getElementById('guestPhone').value.trim(),
+        id_card: document.getElementById('guestIdCard').value.trim(),
+        gender: document.getElementById('guestGender').value,
+        nationality: document.getElementById('guestNationality').value.trim(),
+        birthday: document.getElementById('guestBirthday').value,
+        email: document.getElementById('guestEmail').value.trim(),
+        address: document.getElementById('guestAddress').value.trim(),
+        notes: document.getElementById('guestNotes').value.trim(),
+    };
+    const url = id ? `/api/guests/${id}` : '/api/guests';
+    const method = id ? 'PUT' : 'POST';
+    const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+    const json = await res.json();
+    if (json.success) { closeModal(); loadGuests(); showToast(id ? '客人已更新' : '客人已新增', 'success'); }
+    else { showToast(json.error || '操作失败', 'error'); }
+}
+
+async function editGuest(id) {
+    const res = await fetch(`/api/guests/${id}`);
+    const json = await res.json();
+    if (json.success) showGuestForm(json.data);
+}
+
+async function viewGuest(id) {
+    const res = await fetch(`/api/guests/${id}`);
+    const json = await res.json();
+    if (!json.success) return;
+    const g = json.data;
+    const genderText = g.gender === 'male' ? '男' : g.gender === 'female' ? '女' : '未知';
+    let bookingsHtml = '';
+    if (g.bookings && g.bookings.length > 0) {
+        bookingsHtml = '<h4 style="margin-top:16px;">预订历史</h4><div class="table-container"><table class="table"><thead><tr><th>入住日期</th><th>退房日期</th><th>金额</th><th>状态</th></tr></thead><tbody>';
+        g.bookings.forEach(b => {
+            bookingsHtml += `<tr><td>${b.check_in_date}</td><td>${b.check_out_date}</td><td>¥${b.total_price.toFixed(2)}</td><td>${b.status}</td></tr>`;
+        });
+        bookingsHtml += '</tbody></table></div>';
+    } else {
+        bookingsHtml = '<p class="text-muted">暂无预订记录</p>';
+    }
+    document.getElementById('modalTitle').textContent = '客人详情';
+    document.getElementById('modalBody').innerHTML = `
+        <div class="detail-grid">
+            <div><strong>姓名:</strong> ${escHtml(g.name)}</div>
+            <div><strong>性别:</strong> ${genderText}</div>
+            <div><strong>手机:</strong> ${escHtml(g.phone || '-')}</div>
+            <div><strong>身份证:</strong> ${escHtml(g.id_card || '-')}</div>
+            <div><strong>国籍:</strong> ${escHtml(g.nationality || '-')}</div>
+            <div><strong>生日:</strong> ${g.birthday || '-'}</div>
+            <div><strong>邮箱:</strong> ${escHtml(g.email || '-')}</div>
+            <div><strong>地址:</strong> ${escHtml(g.address || '-')}</div>
+            <div><strong>备注:</strong> ${escHtml(g.notes || '-')}</div>
+            <div><strong>创建时间:</strong> ${g.created_at}</div>
+        </div>
+        ${bookingsHtml}`;
+    document.getElementById('modalFooter').innerHTML = `<button class="btn btn-outline" onclick="closeModal()">关闭</button>`;
+    openModal();
+}
+
+async function deleteGuest(id, name) {
+    if (!confirm(`确定要删除客人 "${name}" 吗？`)) return;
+    const res = await fetch(`/api/guests/${id}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (json.success) { loadGuests(); showToast('客人已删除', 'success'); }
+    else { showToast(json.error || '删除失败', 'error'); }
+}
+</script>
+{% endblock %}

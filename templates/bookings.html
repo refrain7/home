@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+{% block title %}预订管理 - 民宿房间管理系统{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>📋 预订管理</h1>
+    <button class="btn btn-primary" onclick="showBookingForm()">+ 新增预订</button>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="filter-bar">
+            <input type="text" id="searchKeyword" placeholder="🔍 搜索客人姓名、手机号、房间号..." oninput="loadBookings()" />
+            <select id="filterStatus" onchange="loadBookings()">
+                <option value="">全部状态</option>
+                <option value="pending">待确认</option>
+                <option value="confirmed">已确认</option>
+                <option value="checked_in">已入住</option>
+                <option value="checked_out">已退房</option>
+                <option value="cancelled">已取消</option>
+                <option value="no_show">未到店</option>
+            </select>
+            <input type="date" id="filterDateFrom" onchange="loadBookings()" title="入住开始日期" />
+            <input type="date" id="filterDateTo" onchange="loadBookings()" title="入住结束日期" />
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>客人</th>
+                        <th>房间号</th>
+                        <th>入住日期</th>
+                        <th>退房日期</th>
+                        <th>人数</th>
+                        <th>金额</th>
+                        <th>押金</th>
+                        <th>状态</th>
+                        <th>来源</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="bookingTableBody">
+                    <tr><td colspan="12" class="text-center text-muted">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination" id="bookingPagination"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+let guestsList = [];
+let roomsList = [];
+
+document.addEventListener('DOMContentLoaded', async () => {
+    // 预加载客人和房间列表
+    const [gRes, rRes] = await Promise.all([
+        fetch('/api/guests?page=1&keyword='),
+        fetch('/api/rooms?page=1&keyword=')
+    ]);
+    const gJson = await gRes.json();
+    const rJson = await rRes.json();
+    if (gJson.success) guestsList = gJson.data.items;
+    if (rJson.success) roomsList = rJson.data.items;
+    loadBookings();
+});
+
+async function loadBookings() {
+    const keyword = document.getElementById('searchKeyword').value;
+    const status = document.getElementById('filterStatus').value;
+    const dateFrom = document.getElementById('filterDateFrom').value;
+    const dateTo = document.getElementById('filterDateTo').value;
+    const res = await fetch(`/api/bookings?keyword=${encodeURIComponent(keyword)}&status=${status}&date_from=${dateFrom}&date_to=${dateTo}&page=${currentPage}`);
+    const json = await res.json();
+    if (!json.success) return;
+
+    const data = json.data;
+    const statusClass = {pending:'badge-warning', confirmed:'badge-info', checked_in:'badge-success', checked_out:'badge-secondary', cancelled:'badge-danger', no_show:'badge-dark'};
+    let html = '';
+    if (data.items.length === 0) {
+        html = '<tr><td colspan="12" class="text-center text-muted">暂无预订数据</td></tr>';
+    } else {
+        data.items.forEach(b => {
+            html += `
+                <tr>
+                    <td>${b.id}</td>
+                    <td><strong>${escHtml(b.guest_name)}</strong><br><small class="text-muted">${escHtml(b.guest_phone)}</small></td>
+                    <td><span class="badge badge-outline">${escHtml(b.room_number)}</span></td>
+                    <td>${b.check_in_date}</td>
+                    <td>${b.check_out_date}</td>
+                    <td>${b.guest_count}人</td>
+                    <td><strong>¥${b.total_price.toFixed(2)}</strong></td>
+                    <td>¥${b.deposit.toFixed(2)}</td>
+                    <td><span class="badge ${statusClass[b.status] || ''}">${b.status}</span></td>
+                    <td>${escHtml(b.source || '-')}</td>
+                    <td><small>${b.created_at}</small></td>
+                    <td class="action-cell">
+                        <button class="btn btn-sm btn-outline" onclick="editBooking(${b.id})">编辑</button>
+                        <button class="btn btn-sm btn-outline" onclick="changeStatus(${b.id}, '${b.status}')">状态</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteBooking(${b.id})">删除</button>
+                    </td>
+                </tr>`;
+        });
+    }
+    document.getElementById('bookingTableBody').innerHTML = html;
+    renderPagination('bookingPagination', data, loadBookings);
+}
+
+function showBookingForm(data = null) {
+    const isEdit = data !== null;
+    document.getElementById('modalTitle').textContent = isEdit ? '编辑预订' : '新增预订';
+
+    let guestOptions = '<option value="">请选择客人</option>';
+    guestsList.forEach(g => {
+        guestOptions += `<option value="${g.id}" ${data && data.guest_id === g.id ? 'selected' : ''}>${escHtml(g.name)} (${escHtml(g.phone || '')})</option>`;
+    });
+    let roomOptions = '<option value="">请选择房间</option>';
+    roomsList.forEach(r => {
+        const typeName = r.room_type_name || '';
+        roomOptions += `<option value="${r.id}" ${data && data.room_id === r.id ? 'selected' : ''}>${escHtml(r.room_number)} (${escHtml(typeName)})</option>`;
+    });
+
+    const statusOptions = [
+        ['pending', '待确认'], ['confirmed', '已确认'], ['checked_in', '已入住'],
+        ['checked_out', '已退房'], ['cancelled', '已取消'], ['no_show', '未到店']
+    ].map(([k,v]) => `<option value="${k}" ${data && data.status === k ? 'selected' : ''}>${v}</option>`).join('');
+
+    document.getElementById('modalBody').innerHTML = `
+        <form id="bookingForm">
+            <input type="hidden" id="bookingId" value="${data ? data.id : ''}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>客人 <span class="required">*</span></label>
+                    <select id="bookingGuestId" class="form-control">${guestOptions}</select>
+                </div>
+                <div class="form-group">
+                    <label>房间 <span class="required">*</span></label>
+                    <select id="bookingRoomId" class="form-control">${roomOptions}</select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>入住日期 <span class="required">*</span></label>
+                    <input type="date" id="bookingCheckIn" class="form-control" value="${data ? data.check_in_date : ''}" required>
+                </div>
+                <div class="form-group">
+                    <label>退房日期 <span class="required">*</span></label>
+                    <input type="date" id="bookingCheckOut" class="form-control" value="${data ? data.check_out_date : ''}" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>入住人数</label>
+                    <input type="number" id="bookingGuestCount" class="form-control" value="${data ? data.guest_count : 1}" min="1">
+                </div>
+                <div class="form-group">
+                    <label>总金额</label>
+                    <input type="number" id="bookingTotalPrice" class="form-control" step="0.01" value="${data ? data.total_price : 0}">
+                </div>
+                <div class="form-group">
+                    <label>押金</label>
+                    <input type="number" id="bookingDeposit" class="form-control" step="0.01" value="${data ? data.deposit : 0}">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>状态</label>
+                    <select id="bookingStatus" class="form-control">${statusOptions}</select>
+                </div>
+                <div class="form-group">
+                    <label>预订来源</label>
+                    <input type="text" id="bookingSource" class="form-control" value="${data ? escHtml(data.source || '') : '直接预订'}" placeholder="如: 携程, 美团, 直接预订">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>备注</label>
+                <textarea id="bookingNotes" class="form-control" rows="2">${data ? escHtml(data.notes || '') : ''}</textarea>
+            </div>
+        </form>`;
+    document.getElementById('modalFooter').innerHTML = `
+        <button class="btn btn-outline" onclick="closeModal()">取消</button>
+        <button class="btn btn-primary" onclick="saveBooking()">${isEdit ? '保存' : '确认新增'}</button>`;
+    openModal();
+}
+
+async function saveBooking() {
+    const id = document.getElementById('bookingId').value;
+    const guestId = parseInt(document.getElementById('bookingGuestId').value);
+    const roomId = parseInt(document.getElementById('bookingRoomId').value);
+    if (!guestId || !roomId) { showToast('请选择客人和房间', 'error'); return; }
+
+    const checkIn = document.getElementById('bookingCheckIn').value;
+    const checkOut = document.getElementById('bookingCheckOut').value;
+    if (!checkIn || !checkOut) { showToast('请选择入住和退房日期', 'error'); return; }
+    if (checkOut <= checkIn) { showToast('退房日期必须晚于入住日期', 'error'); return; }
+
+    const data = {
+        guest_id: guestId, room_id: roomId,
+        check_in_date: checkIn, check_out_date: checkOut,
+        guest_count: parseInt(document.getElementById('bookingGuestCount').value) || 1,
+        total_price: parseFloat(document.getElementById('bookingTotalPrice').value) || 0,
+        deposit: parseFloat(document.getElementById('bookingDeposit').value) || 0,
+        status: document.getElementById('bookingStatus').value,
+        source: document.getElementById('bookingSource').value.trim(),
+        notes: document.getElementById('bookingNotes').value.trim(),
+    };
+
+    const url = id ? `/api/bookings/${id}` : '/api/bookings';
+    const method = id ? 'PUT' : 'POST';
+    const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+    const json = await res.json();
+    if (json.success) { closeModal(); loadBookings(); showToast(id ? '预订已更新' : '预订已新增', 'success'); }
+    else { showToast(json.error || '操作失败', 'error'); }
+}
+
+async function editBooking(id) {
+    const res = await fetch(`/api/bookings/${id}`);
+    const json = await res.json();
+    if (json.success) showBookingForm(json.data);
+}
+
+async function changeStatus(id, currentStatus) {
+    const statusMap = {pending:'待确认', confirmed:'已确认', checked_in:'已入住', checked_out:'已退房', cancelled:'已取消', no_show:'未到店'};
+    let options = '';
+    for (const [k, v] of Object.entries(statusMap)) {
+        if (k !== currentStatus) {
+            options += `<option value="${k}">${v}</option>`;
+        }
+    }
+    document.getElementById('modalTitle').textContent = '更改预订状态';
+    document.getElementById('modalBody').innerHTML = `
+        <p>当前状态: <strong>${statusMap[currentStatus] || currentStatus}</strong></p>
+        <div class="form-group">
+            <label>选择新状态</label>
+            <select id="newStatusSelect" class="form-control">${options}</select>
+        </div>`;
+    document.getElementById('modalFooter').innerHTML = `
+        <button class="btn btn-outline" onclick="closeModal()">取消</button>
+        <button class="btn btn-primary" onclick="confirmChangeStatus(${id})">确认更改</button>`;
+    openModal();
+}
+
+async function confirmChangeStatus(id) {
+    const newStatus = document.getElementById('newStatusSelect').value;
+    // 获取当前预订数据
+    const getRes = await fetch(`/api/bookings/${id}`);
+    const bookingData = await getRes.json();
+    if (!bookingData.success) { showToast('获取预订信息失败', 'error'); return; }
+    const b = bookingData.data;
+    const updateRes = await fetch(`/api/bookings/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+            room_id: b.room_id, guest_id: b.guest_id,
+            check_in_date: b.check_in_date, check_out_date: b.check_out_date,
+            guest_count: b.guest_count, total_price: b.total_price,
+            deposit: b.deposit, status: newStatus,
+            source: b.source || '', notes: b.notes || ''
+        })
+    });
+    const updateJson = await updateRes.json();
+    if (updateJson.success) { closeModal(); loadBookings(); showToast('状态已更新', 'success'); }
+    else { showToast(updateJson.error || '更新失败', 'error'); }
+}
+
+async function deleteBooking(id) {
+    if (!confirm('确定要删除此预订吗？')) return;
+    const res = await fetch(`/api/bookings/${id}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (json.success) { loadBookings(); showToast('预订已删除', 'success'); }
+    else { showToast(json.error || '删除失败', 'error'); }
+}
+</script>
+{% endblock %}

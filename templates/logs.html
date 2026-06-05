@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}系统日志 - 民宿房间管理系统{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>📝 系统日志</h1>
+    <div>
+        <select id="filterLevel" onchange="loadLogs()">
+            <option value="">全部级别</option>
+            <option value="INFO">INFO</option>
+            <option value="WARNING">WARNING</option>
+            <option value="ERROR">ERROR</option>
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="refreshLogs()">🔄 刷新</button>
+        <button class="btn btn-danger btn-sm" onclick="clearLogs()">🗑️ 清空日志</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body" id="logsContainer">
+        <p class="text-center text-muted">加载中...</p>
+    </div>
+    <div class="pagination" id="logPagination"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+
+document.addEventListener('DOMContentLoaded', () => loadLogs());
+
+async function loadLogs() {
+    const level = document.getElementById('filterLevel').value;
+    const res = await fetch(`/api/logs?level=${level}&page=${currentPage}`);
+    const json = await res.json();
+    if (!json.success) return;
+
+    const data = json.data;
+    let html = '';
+    if (data.items.length === 0) {
+        html = '<p class="text-center text-muted">暂无日志记录</p>';
+    } else {
+        data.items.forEach(l => {
+            const levelBadge = {INFO:'badge-info', WARNING:'badge-warning', ERROR:'badge-danger'};
+            html += `
+                <div class="log-entry ${l.level === 'ERROR' ? 'log-error' : l.level === 'WARNING' ? 'log-warning' : ''}">
+                    <span class="badge ${levelBadge[l.level] || 'badge-secondary'}">${l.level}</span>
+                    <span class="log-time">${l.timestamp}</span>
+                    <span class="log-user">[${escHtml(l.user || '系统')}]</span>
+                    <span class="log-action">${escHtml(l.action)}</span>
+                    <span class="log-details text-muted">${escHtml(l.details || '')}</span>
+                </div>`;
+        });
+    }
+    document.getElementById('logsContainer').innerHTML = html;
+    renderPagination('logPagination', data, loadLogs);
+}
+
+function refreshLogs() {
+    currentPage = 1;
+    loadLogs();
+    showToast('日志已刷新', 'info');
+}
+
+async function clearLogs() {
+    if (!confirm('确定要清空所有日志吗？此操作不可恢复！')) return;
+    const res = await fetch('/api/logs/clear', { method: 'POST' });
+    const json = await res.json();
+    if (json.success) {
+        loadLogs();
+        showToast('日志已清空', 'success');
+    } else {
+        showToast('清空失败', 'error');
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}仪表盘 - 民宿房间管理系统{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>📊 仪表盘</h1>
+    <p class="text-muted">民宿运营数据概览</p>
+</div>
+
+<!-- 统计卡片 -->
+<div class="stats-grid" id="statsGrid">
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#e0f2fe;color:#0284c7;">🚪</div>
+        <div class="stat-info">
+            <span class="stat-value" id="statTotalRooms">-</span>
+            <span class="stat-label">总房间数</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#dcfce7;color:#16a34a;">✅</div>
+        <div class="stat-info">
+            <span class="stat-value" id="statAvailable">-</span>
+            <span class="stat-label">空闲房间</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#fef3c7;color:#d97706;">🛏️</div>
+        <div class="stat-info">
+            <span class="stat-value" id="statOccupied">-</span>
+            <span class="stat-label">已入住</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#ede9fe;color:#7c3aed;">📅</div>
+        <div class="stat-info">
+            <span class="stat-value" id="statReserved">-</span>
+            <span class="stat-label">已预订</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#fce7f3;color:#db2777;">💰</div>
+        <div class="stat-info">
+            <span class="stat-value" id="statTodayIncome">¥0</span>
+            <span class="stat-label">今日收入</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#ccfbf1;color:#0d9488;">📈</div>
+        <div class="stat-info">
+            <span class="stat-value" id="statOccupancy">-</span>
+            <span class="stat-label">入住率</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#fef2f2;color:#dc2626;">🧹</div>
+        <div class="stat-info">
+            <span class="stat-value" id="statCleaning">-</span>
+            <span class="stat-label">打扫中</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#f3f4f6;color:#6b7280;">🔧</div>
+        <div class="stat-info">
+            <span class="stat-value" id="statMaintenance">-</span>
+            <span class="stat-label">维修中</span>
+        </div>
+    </div>
+</div>
+
+<div class="dashboard-grid">
+    <!-- 今日概况 -->
+    <div class="card">
+        <div class="card-header">
+            <h3>📋 今日概况</h3>
+        </div>
+        <div class="card-body">
+            <div class="info-row">
+                <span>今日入住</span>
+                <span class="badge badge-success" id="todayCheckins">0</span>
+            </div>
+            <div class="info-row">
+                <span>今日退房</span>
+                <span class="badge badge-warning" id="todayCheckouts">0</span>
+            </div>
+            <div class="info-row">
+                <span>活跃预订</span>
+                <span class="badge badge-info" id="activeBookings">0</span>
+            </div>
+            <div class="info-row">
+                <span>客人总数</span>
+                <span class="badge badge-secondary" id="totalGuests">0</span>
+            </div>
+            <div class="info-row">
+                <span>本月收入</span>
+                <strong style="color:var(--success);" id="monthIncome">¥0.00</strong>
+            </div>
+        </div>
+    </div>
+
+    <!-- 最近预订 -->
+    <div class="card">
+        <div class="card-header">
+            <h3>🕐 最近预订</h3>
+        </div>
+        <div class="card-body" id="recentBookings">
+            <p class="text-muted text-center">加载中...</p>
+        </div>
+    </div>
+
+    <!-- 最近日志 -->
+    <div class="card">
+        <div class="card-header">
+            <h3>📝 最近日志</h3>
+        </div>
+        <div class="card-body" id="recentLogs" style="max-height:300px;overflow-y:auto;">
+            <p class="text-muted text-center">加载中...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', loadDashboard);
+
+async function loadDashboard() {
+    try {
+        const res = await fetch('/api/dashboard');
+        const json = await res.json();
+        if (!json.success) return;
+
+        const d = json.data;
+        document.getElementById('statTotalRooms').textContent = d.total_rooms;
+        document.getElementById('statAvailable').textContent = d.available;
+        document.getElementById('statOccupied').textContent = d.occupied;
+        document.getElementById('statReserved').textContent = d.reserved;
+        document.getElementById('statTodayIncome').textContent = '¥' + d.today_income.toFixed(2);
+        document.getElementById('statOccupancy').textContent = d.occupancy_rate + '%';
+        document.getElementById('statCleaning').textContent = d.cleaning;
+        document.getElementById('statMaintenance').textContent = d.maintenance;
+        document.getElementById('todayCheckins').textContent = d.today_checkins;
+        document.getElementById('todayCheckouts').textContent = d.today_checkouts;
+        document.getElementById('activeBookings').textContent = d.active_bookings;
+        document.getElementById('totalGuests').textContent = d.total_guests;
+        document.getElementById('monthIncome').textContent = '¥' + d.month_income.toFixed(2);
+
+        // 最近预订
+        let bookingsHtml = '';
+        if (d.recent_bookings.length === 0) {
+            bookingsHtml = '<p class="text-muted text-center">暂无预订</p>';
+        } else {
+            d.recent_bookings.forEach(b => {
+                bookingsHtml += `
+                    <div class="list-item">
+                        <div>
+                            <strong>${escHtml(b.guest_name || '未知')}</strong>
+                            <span class="text-muted"> - ${b.room_number || ''}</span>
+                        </div>
+                        <div class="text-sm text-muted">
+                            ${b.check_in_date} ~ ${b.check_out_date}
+                            <span class="badge badge-sm">${b.status}</span>
+                        </div>
+                    </div>`;
+            });
+        }
+        document.getElementById('recentBookings').innerHTML = bookingsHtml;
+
+        // 最近日志
+        let logsHtml = '';
+        if (d.recent_logs.length === 0) {
+            logsHtml = '<p class="text-muted text-center">暂无日志</p>';
+        } else {
+            d.recent_logs.forEach(l => {
+                const levelClass = l.level === 'ERROR' ? 'text-danger' :
+                                   l.level === 'WARNING' ? 'text-warning' : '';
+                logsHtml += `
+                    <div class="list-item">
+                        <div>
+                            <span class="${levelClass}">[${l.level}]</span>
+                            <strong>${escHtml(l.action)}</strong>
+                        </div>
+                        <div class="text-sm text-muted">${l.timestamp} | ${escHtml(l.details)}</div>
+                    </div>`;
+            });
+        }
+        document.getElementById('recentLogs').innerHTML = logsHtml;
+    } catch(e) {
+        console.error('加载仪表盘失败:', e);
+    }
+}
+
+// 每30秒自动刷新
+setInterval(loadDashboard, 30000);
+</script>
+{% endblock %}

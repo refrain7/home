@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}民宿房间管理系统{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- 侧边栏 -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>🏡 民宿管理</h2>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="{{ url_for('index') }}" class="nav-item {% if request.path == '/' %}active{% endif %}">
+                <span class="nav-icon">📊</span>
+                <span>仪表盘</span>
+            </a>
+            <a href="{{ url_for('bookings_page') }}" class="nav-item {% if request.path == '/bookings' %}active{% endif %}">
+                <span class="nav-icon">📋</span>
+                <span>预订管理</span>
+            </a>
+            <a href="{{ url_for('calendar_page') }}" class="nav-item {% if request.path == '/calendar' %}active{% endif %}">
+                <span class="nav-icon">📅</span>
+                <span>日历视图</span>
+            </a>
+            <a href="{{ url_for('rooms_page') }}" class="nav-item {% if request.path == '/rooms' %}active{% endif %}">
+                <span class="nav-icon">🚪</span>
+                <span>房间管理</span>
+            </a>
+            <a href="{{ url_for('room_types_page') }}" class="nav-item {% if request.path == '/room-types' %}active{% endif %}">
+                <span class="nav-icon">🏠</span>
+                <span>房型管理</span>
+            </a>
+            <a href="{{ url_for('guests_page') }}" class="nav-item {% if request.path == '/guests' %}active{% endif %}">
+                <span class="nav-icon">👤</span>
+                <span>客人管理</span>
+            </a>
+            <a href="{{ url_for('logs_page') }}" class="nav-item {% if request.path == '/logs' %}active{% endif %}">
+                <span class="nav-icon">📝</span>
+                <span>系统日志</span>
+            </a>
+        </nav>
+        <div class="sidebar-footer">
+            <span>v1.0 | iStoreOS</span>
+        </div>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="main-content" id="mainContent">
+        <!-- 顶部栏 -->
+        <header class="topbar">
+            <button class="menu-toggle" id="menuToggle" title="切换菜单">☰</button>
+            <div class="search-box">
+                <input type="text" id="globalSearch" placeholder="🔍 全局搜索（客人、房间、预订...）" />
+                <div class="search-results" id="searchResults" style="display:none;"></div>
+            </div>
+            <div class="topbar-actions">
+                <span class="current-time" id="currentTime"></span>
+                <button class="btn btn-sm btn-outline" onclick="exportData()" title="导出数据">📤 导出</button>
+                <button class="btn btn-sm btn-outline" onclick="document.getElementById('importFile').click()" title="导入数据">📥 导入</button>
+                <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)">
+            </div>
+        </header>
+
+        <!-- 页面内容 -->
+        <div class="page-content">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <!-- Toast 通知 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- 通用模态框 -->
+    <div class="modal-overlay" id="modalOverlay" style="display:none;">
+        <div class="modal" id="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle"></h3>
+                <button class="modal-close" onclick="closeModal()">✕</button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+            <div class="modal-footer" id="modalFooter"></div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
