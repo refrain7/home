@@ -85,6 +85,12 @@ def logs_page():
     return render_template('logs.html')
 
 
+@app.route('/diary')
+def diary_page():
+    """运营日记页面"""
+    return render_template('diary.html')
+
+
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
     """访问上传的文件"""
@@ -780,13 +786,22 @@ def api_calendar_data():
             'color': _get_status_color(b['status'])
         })
 
+    # 筛选该月的特殊价格
+    all_prices = DataManager.read_json(PRICES_FILE, [])
+    month_prices = {}
+    for p in all_prices:
+        if p.get('date', '').startswith(f'{year}-{month:02d}'):
+            key = f"{p.get('room_id', 0)}_{p.get('date', '')}"
+            month_prices[key] = p
+
     return jsonify({
         'success': True,
         'data': {
             'year': year,
             'month': month,
             'rooms': rooms,
-            'events': events
+            'events': events,
+            'prices': month_prices
         }
     })
 
@@ -887,6 +902,10 @@ def api_export():
         export_data['bookings'] = DataManager.read_json(BOOKINGS_FILE, [])
     if data_type in ('all', 'logs'):
         export_data['logs'] = DataManager.read_json(LOGS_FILE, [])
+    if data_type in ('all', 'special_prices'):
+        export_data['special_prices'] = DataManager.read_json(PRICES_FILE, [])
+    if data_type in ('all', 'diary'):
+        export_data['diary'] = DataManager.read_json(DIARY_FILE, [])
 
     export_data['export_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     export_data['version'] = '1.0'
@@ -908,6 +927,8 @@ def api_import():
             ('rooms', ROOMS_FILE),
             ('guests', GUESTS_FILE),
             ('bookings', BOOKINGS_FILE),
+            ('special_prices', PRICES_FILE),
+            ('diary', DIARY_FILE),
         ]:
             if key in data and isinstance(data[key], list):
                 DataManager.write_json(filepath, data[key])
@@ -917,6 +938,148 @@ def api_import():
         return jsonify({'success': True, 'message': f'成功导入 {count} 条记录'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
+
+
+# ==================== API：特殊价格管理（日历点击设置） ====================
+
+@app.route('/api/special-prices', methods=['GET', 'POST'])
+def api_special_prices():
+    if request.method == 'GET':
+        prices = DataManager.read_json(PRICES_FILE, [])
+        room_id = request.args.get('room_id', '')
+        date = request.args.get('date', '')
+        if room_id:
+            prices = [p for p in prices if str(p.get('room_id')) == room_id]
+        if date:
+            prices = [p for p in prices if p.get('date') == date]
+        return jsonify({'success': True, 'data': prices})
+
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
+            prices = DataManager.read_json(PRICES_FILE, [])
+            room_id = int(data.get('room_id', 0))
+            date = data.get('date', '').strip()
+
+            # 检查是否已存在
+            existing = [p for p in prices
+                        if p.get('room_id') == room_id and p.get('date') == date]
+            if existing:
+                existing[0]['price'] = float(data.get('price', 0))
+                existing[0]['reason'] = data.get('reason', '').strip()
+                existing[0]['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                DataManager.write_json(PRICES_FILE, prices)
+                SystemLogger.info('更新特殊价格',
+                                  f'房间{room_id} {date}: ¥{data.get("price", 0)}')
+                return jsonify({'success': True, 'data': existing[0], 'updated': True})
+
+            new_price = {
+                'id': DataManager.generate_id(prices),
+                'room_id': room_id,
+                'date': date,
+                'price': float(data.get('price', 0)),
+                'reason': data.get('reason', '').strip(),
+                'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+            prices.append(new_price)
+            DataManager.write_json(PRICES_FILE, prices)
+            SystemLogger.info('设置特殊价格',
+                              f'房间{room_id} {date}: ¥{data.get("price", 0)}')
+            return jsonify({'success': True, 'data': new_price})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+
+
+@app.route('/api/special-prices/<int:price_id>', methods=['DELETE'])
+def api_special_price_delete(price_id):
+    prices = DataManager.read_json(PRICES_FILE, [])
+    item = DataManager.get_by_id(prices, price_id)
+    if DataManager.delete_by_id(prices, price_id):
+        DataManager.write_json(PRICES_FILE, prices)
+        SystemLogger.info('删除特殊价格',
+                          f'房间{item.get("room_id")} {item.get("date")}')
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'error': '记录不存在'}), 404
+
+
+# ==================== API：运营日记 ====================
+
+@app.route('/api/diary', methods=['GET', 'POST'])
+def api_diary():
+    if request.method == 'GET':
+        page = int(request.args.get('page', 1))
+        keyword = request.args.get('keyword', '')
+        diary_list = DataManager.read_json(DIARY_FILE, [])
+
+        if keyword:
+            diary_list = DataManager.search(diary_list, keyword,
+                                            ['title', 'content', 'weather', 'mood'])
+
+        result = DataManager.query(diary_list, sort_key='date',
+                                   sort_reverse=True, page=page,
+                                   page_size=PAGE_SIZE)
+        return jsonify({'success': True, 'data': result})
+
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
+            diary_list = DataManager.read_json(DIARY_FILE, [])
+
+            new_entry = {
+                'id': DataManager.generate_id(diary_list),
+                'date': data.get('date', get_today_str()),
+                'title': data.get('title', '').strip(),
+                'content': data.get('content', '').strip(),
+                'weather': data.get('weather', ''),
+                'mood': data.get('mood', ''),
+                'images': data.get('images', []),
+                'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+            diary_list.append(new_entry)
+            DataManager.write_json(DIARY_FILE, diary_list)
+            SystemLogger.info('新增日记', f'日期: {new_entry["date"]}, 标题: {new_entry["title"]}')
+            return jsonify({'success': True, 'data': new_entry})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+
+
+@app.route('/api/diary/<int:entry_id>', methods=['GET', 'PUT', 'DELETE'])
+def api_diary_detail(entry_id):
+    diary_list = DataManager.read_json(DIARY_FILE, [])
+
+    if request.method == 'GET':
+        item = DataManager.get_by_id(diary_list, entry_id)
+        if item:
+            return jsonify({'success': True, 'data': item})
+        return jsonify({'success': False, 'error': '日记不存在'}), 404
+
+    elif request.method == 'PUT':
+        try:
+            data = request.get_json()
+            updates = {
+                'date': data.get('date', get_today_str()),
+                'title': data.get('title', '').strip(),
+                'content': data.get('content', '').strip(),
+                'weather': data.get('weather', ''),
+                'mood': data.get('mood', ''),
+                'images': data.get('images', []),
+            }
+            if DataManager.update_by_id(diary_list, entry_id, updates):
+                DataManager.write_json(DIARY_FILE, diary_list)
+                SystemLogger.info('更新日记', f'日记ID: {entry_id}')
+                return jsonify({'success': True})
+            return jsonify({'success': False, 'error': '日记不存在'}), 404
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+
+    elif request.method == 'DELETE':
+        if DataManager.delete_by_id(diary_list, entry_id):
+            DataManager.write_json(DIARY_FILE, diary_list)
+            SystemLogger.info('删除日记', f'日记ID: {entry_id}')
+            return jsonify({'success': True})
+        return jsonify({'success': False, 'error': '日记不存在'}), 404
 
 
 # ==================== API：批量更新房间状态 ====================

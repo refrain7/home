@@ -1,0 +1,44 @@
+[
+  {
+    "address": "",
+    "birthday": "",
+    "created_at": "2026-06-05 23:06:12",
+    "email": "",
+    "gender": "",
+    "id": 1,
+    "id_card": "",
+    "name": "a",
+    "nationality": "",
+    "notes": "",
+    "phone": "",
+    "updated_at": "2026-06-05 23:06:12"
+  },
+  {
+    "address": "",
+    "birthday": "",
+    "created_at": "2026-06-05 23:12:16",
+    "email": "",
+    "gender": "",
+    "id": 2,
+    "id_card": "",
+    "name": "b",
+    "nationality": "",
+    "notes": "",
+    "phone": "1",
+    "updated_at": "2026-06-05 23:12:16"
+  },
+  {
+    "address": "",
+    "birthday": "",
+    "created_at": "2026-06-05 23:12:25",
+    "email": "",
+    "gender": "male",
+    "id": 3,
+    "id_card": "",
+    "name": "张三",
+    "nationality": "",
+    "notes": "",
+    "phone": "13800138000",
+    "updated_at": "2026-06-05 23:12:25"
+  }
+]

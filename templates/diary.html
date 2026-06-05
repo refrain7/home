@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% block title %}运营日记 - 民宿房间管理系统{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>📖 运营日记</h1>
+    <button class="btn btn-primary" onclick="showDiaryForm()">+ 写日记</button>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="filter-bar">
+            <input type="text" id="searchKeyword" placeholder="🔍 搜索日记标题、内容..." oninput="loadDiary()" />
+        </div>
+    </div>
+    <div class="card-body">
+        <div id="diaryList">
+            <p class="text-center text-muted">加载中...</p>
+        </div>
+        <div class="pagination" id="diaryPagination"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+
+document.addEventListener('DOMContentLoaded', () => loadDiary());
+
+async function loadDiary() {
+    const keyword = document.getElementById('searchKeyword').value;
+    const res = await fetch(`/api/diary?keyword=${encodeURIComponent(keyword)}&page=${currentPage}`);
+    const json = await res.json();
+    if (!json.success) return;
+
+    const data = json.data;
+    let html = '';
+    if (data.items.length === 0) {
+        html = '<div class="empty-state"><p class="text-muted">📭 还没有日记，点击右上角"写日记"开始记录吧</p></div>';
+    } else {
+        data.items.forEach(entry => {
+            const weatherMap = { sunny: '☀️ 晴', cloudy: '⛅ 多云', rainy: '🌧️ 雨', snowy: '❄️ 雪', windy: '💨 风' };
+            const moodMap = { happy: '😊 开心', normal: '😐 平常', tired: '😫 疲惫', excited: '🤩 兴奋', worried: '😟 担忧' };
+            html += `
+                <div class="diary-card">
+                    <div class="diary-header">
+                        <div class="diary-date">
+                            <strong>${escHtml(entry.date)}</strong>
+                            ${entry.weather ? `<span class="badge">${weatherMap[entry.weather] || entry.weather}</span>` : ''}
+                            ${entry.mood ? `<span class="badge badge-outline">${moodMap[entry.mood] || entry.mood}</span>` : ''}
+                        </div>
+                        <div class="diary-actions">
+                            <button class="btn btn-sm btn-outline" onclick="editDiary(${entry.id})">编辑</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteDiary(${entry.id})">删除</button>
+                        </div>
+                    </div>
+                    ${entry.title ? `<h3 class="diary-title">${escHtml(entry.title)}</h3>` : ''}
+                    <div class="diary-content">${escHtml(entry.content).replace(/\n/g, '<br>')}</div>
+                    ${entry.images && entry.images.length > 0 ? `
+                        <div class="diary-images">
+                            ${entry.images.map(img => `<img src="/static/${img}" alt="" class="diary-img">`).join('')}
+                        </div>` : ''}
+                    <div class="diary-time text-muted text-sm">${entry.created_at}</div>
+                </div>`;
+        });
+    }
+    document.getElementById('diaryList').innerHTML = html;
+    renderPagination('diaryPagination', data, loadDiary);
+}
+
+function showDiaryForm(data = null) {
+    const isEdit = data !== null;
+    document.getElementById('modalTitle').textContent = isEdit ? '编辑日记' : '写日记';
+
+    const weatherOptions = [
+        ['', '不选'], ['sunny', '☀️ 晴'], ['cloudy', '⛅ 多云'],
+        ['rainy', '🌧️ 雨'], ['snowy', '❄️ 雪'], ['windy', '💨 风']
+    ].map(([k, v]) => `<option value="${k}" ${data && data.weather === k ? 'selected' : ''}>${v}</option>`).join('');
+
+    const moodOptions = [
+        ['', '不选'], ['happy', '😊 开心'], ['normal', '😐 平常'],
+        ['tired', '😫 疲惫'], ['excited', '🤩 兴奋'], ['worried', '😟 担忧']
+    ].map(([k, v]) => `<option value="${k}" ${data && data.mood === k ? 'selected' : ''}>${v}</option>`).join('');
+
+    document.getElementById('modalBody').innerHTML = `
+        <form id="diaryForm">
+            <input type="hidden" id="diaryId" value="${data ? data.id : ''}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>日期 <span class="required">*</span></label>
+                    <input type="date" id="diaryDate" class="form-control" value="${data ? data.date : new Date().toISOString().slice(0,10)}" required>
+                </div>
+                <div class="form-group">
+                    <label>标题</label>
+                    <input type="text" id="diaryTitle" class="form-control" value="${data ? escHtml(data.title || '') : ''}" placeholder="给今天起个标题...">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>天气</label>
+                    <select id="diaryWeather" class="form-control">${weatherOptions}</select>
+                </div>
+                <div class="form-group">
+                    <label>心情</label>
+                    <select id="diaryMood" class="form-control">${moodOptions}</select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>内容 <span class="required">*</span></label>
+                <textarea id="diaryContent" class="form-control" rows="8" required placeholder="记录今天的运营情况...">${data ? escHtml(data.content || '') : ''}</textarea>
+            </div>
+            <div class="form-group">
+                <label>图片</label>
+                <div class="image-upload-area" id="diaryImages">
+                    ${(data && data.images) ? data.images.map(img => `
+                        <div class="image-thumb">
+                            <img src="/static/${img}" alt="">
+                            <button type="button" class="image-remove" onclick="this.parentElement.remove()">✕</button>
+                            <input type="hidden" name="diaryImage" value="${img}">
+                        </div>`).join('') : ''}
+                    <label class="image-add-btn">
+                        <input type="file" accept="image/*" onchange="uploadDiaryImage(this)" style="display:none">
+                        <span>+ 添加图片</span>
+                    </label>
+                </div>
+            </div>
+        </form>`;
+    document.getElementById('modalFooter').innerHTML = `
+        <button class="btn btn-outline" onclick="closeModal()">取消</button>
+        <button class="btn btn-primary" onclick="saveDiary()">${isEdit ? '保存' : '发布'}</button>`;
+    openModal();
+}
+
+async function uploadDiaryImage(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('subfolder', 'diary');
+    try {
+        const res = await fetch('/api/upload/diary', { method: 'POST', body: formData });
+        const json = await res.json();
+        if (json.success) {
+            const container = document.getElementById('diaryImages');
+            const div = document.createElement('div');
+            div.className = 'image-thumb';
+            div.innerHTML = `
+                <img src="/static/${json.path}" alt="">
+                <button type="button" class="image-remove" onclick="this.parentElement.remove()">✕</button>
+                <input type="hidden" name="diaryImage" value="${json.path}">`;
+            container.insertBefore(div, input.parentElement);
+            showToast('图片上传成功', 'success');
+        } else {
+            showToast(json.error || '上传失败', 'error');
+        }
+    } catch (e) { showToast('上传失败', 'error'); }
+    input.value = '';
+}
+
+async function saveDiary() {
+    const id = document.getElementById('diaryId').value;
+    const date = document.getElementById('diaryDate').value;
+    const content = document.getElementById('diaryContent').value.trim();
+    if (!date || !content) { showToast('请填写日期和内容', 'error'); return; }
+
+    const imageInputs = document.querySelectorAll('input[name="diaryImage"]');
+    const images = Array.from(imageInputs).map(i => i.value);
+
+    const data = {
+        date, images,
+        title: document.getElementById('diaryTitle').value.trim(),
+        content,
+        weather: document.getElementById('diaryWeather').value,
+        mood: document.getElementById('diaryMood').value,
+    };
+
+    const url = id ? `/api/diary/${id}` : '/api/diary';
+    const method = id ? 'PUT' : 'POST';
+    const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+    const json = await res.json();
+    if (json.success) { closeModal(); loadDiary(); showToast(id ? '日记已更新' : '日记已发布', 'success'); }
+    else { showToast(json.error || '操作失败', 'error'); }
+}
+
+async function editDiary(id) {
+    const res = await fetch(`/api/diary/${id}`);
+    const json = await res.json();
+    if (json.success) showDiaryForm(json.data);
+}
+
+async function deleteDiary(id) {
+    if (!confirm('确定要删除这篇日记吗？')) return;
+    const res = await fetch(`/api/diary/${id}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (json.success) { loadDiary(); showToast('日记已删除', 'success'); }
+    else { showToast(json.error || '删除失败', 'error'); }
+}
+</script>
+{% endblock %}

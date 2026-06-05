@@ -42,6 +42,10 @@
                 <span class="nav-icon">📝</span>
                 <span>系统日志</span>
             </a>
+            <a href="{{ url_for('diary_page') }}" class="nav-item {% if request.path == '/diary' %}active{% endif %}">
+                <span class="nav-icon">📖</span>
+                <span>运营日记</span>
+            </a>
         </nav>
         <div class="sidebar-footer">
             <span>v1.0 | iStoreOS</span>

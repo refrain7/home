@@ -136,9 +136,12 @@ function showBookingForm(data = null) {
         <form id="bookingForm">
             <input type="hidden" id="bookingId" value="${data ? data.id : ''}">
             <div class="form-row">
-                <div class="form-group">
+                <div class="form-group" style="flex:2;">
                     <label>客人 <span class="required">*</span></label>
-                    <select id="bookingGuestId" class="form-control">${guestOptions}</select>
+                    <div style="display:flex;gap:6px;">
+                        <select id="bookingGuestId" class="form-control">${guestOptions}</select>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="showQuickGuestForm()" style="white-space:nowrap;flex-shrink:0;" title="快速新增客人">＋ 新增</button>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>房间 <span class="required">*</span></label>
@@ -224,6 +227,139 @@ async function editBooking(id) {
     const res = await fetch(`/api/bookings/${id}`);
     const json = await res.json();
     if (json.success) showBookingForm(json.data);
+}
+
+// ==================== 快速新增客人（在预订弹窗内） ====================
+
+let _pendingBookingData = null;  // 暂存预订表单数据
+
+function showQuickGuestForm() {
+    // 1. 保存当前预订表单数据
+    _pendingBookingData = captureBookingFormData();
+
+    // 2. 切换模态框内容为快速新增客人表单
+    document.getElementById('modalTitle').textContent = '快速新增客人';
+    document.getElementById('modalBody').innerHTML = `
+        <form id="quickGuestForm">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>姓名 <span class="required">*</span></label>
+                    <input type="text" id="quickGuestName" class="form-control" required placeholder="请输入客人姓名">
+                </div>
+                <div class="form-group">
+                    <label>性别</label>
+                    <select id="quickGuestGender" class="form-control">
+                        <option value="">未知</option>
+                        <option value="male">男</option>
+                        <option value="female">女</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>手机号 <span class="required">*</span></label>
+                    <input type="text" id="quickGuestPhone" class="form-control" required placeholder="请输入手机号">
+                </div>
+                <div class="form-group">
+                    <label>身份证号</label>
+                    <input type="text" id="quickGuestIdCard" class="form-control" placeholder="选填">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>备注</label>
+                <input type="text" id="quickGuestNotes" class="form-control" placeholder="选填">
+            </div>
+        </form>`;
+    document.getElementById('modalFooter').innerHTML = `
+        <button class="btn btn-outline" onclick="cancelQuickGuest()">← 返回预订</button>
+        <button class="btn btn-primary" onclick="saveQuickGuest()">确认新增</button>`;
+}
+
+function captureBookingFormData() {
+    const el = (id) => { const e = document.getElementById(id); return e ? e.value : ''; };
+    return {
+        id: el('bookingId'),
+        guest_id: el('bookingGuestId'),
+        room_id: el('bookingRoomId'),
+        check_in_date: el('bookingCheckIn'),
+        check_out_date: el('bookingCheckOut'),
+        guest_count: el('bookingGuestCount') || '1',
+        total_price: el('bookingTotalPrice') || '0',
+        deposit: el('bookingDeposit') || '0',
+        status: el('bookingStatus') || 'pending',
+        source: el('bookingSource'),
+        notes: el('bookingNotes'),
+    };
+}
+
+async function saveQuickGuest() {
+    const name = document.getElementById('quickGuestName').value.trim();
+    const phone = document.getElementById('quickGuestPhone').value.trim();
+    if (!name) { showToast('请输入客人姓名', 'error'); return; }
+    if (!phone) { showToast('请输入手机号', 'error'); return; }
+
+    const data = {
+        name, phone,
+        id_card: document.getElementById('quickGuestIdCard').value.trim(),
+        gender: document.getElementById('quickGuestGender').value,
+        nationality: '', birthday: '', email: '', address: '',
+        notes: document.getElementById('quickGuestNotes').value.trim(),
+    };
+
+    try {
+        const res = await fetch('/api/guests', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const json = await res.json();
+        if (json.success) {
+            await refreshGuestList();
+            showToast('客人已新增', 'success');
+            restoreBookingForm(json.data.id);
+        } else {
+            showToast(json.error || '新增失败', 'error');
+        }
+    } catch (e) {
+        showToast('新增失败: ' + e.message, 'error');
+    }
+}
+
+function cancelQuickGuest() {
+    restoreBookingForm(null);
+}
+
+function restoreBookingForm(preselectedGuestId) {
+    const bd = _pendingBookingData || {};
+    // 重新渲染预订表单
+    showBookingForm(bd.id ? bd : null);
+    // 恢复表单字段值
+    setTimeout(() => {
+        const setVal = (id, val) => { const e = document.getElementById(id); if (e && val) e.value = val; };
+        // 如果新增了客人，预选新客人
+        if (preselectedGuestId) {
+            setVal('bookingGuestId', preselectedGuestId);
+        } else if (bd.guest_id) {
+            setVal('bookingGuestId', bd.guest_id);
+        }
+        setVal('bookingRoomId', bd.room_id);
+        setVal('bookingCheckIn', bd.check_in_date);
+        setVal('bookingCheckOut', bd.check_out_date);
+        setVal('bookingGuestCount', bd.guest_count);
+        setVal('bookingTotalPrice', bd.total_price);
+        setVal('bookingDeposit', bd.deposit);
+        setVal('bookingStatus', bd.status);
+        setVal('bookingSource', bd.source);
+        setVal('bookingNotes', bd.notes);
+        _pendingBookingData = null;
+    }, 100);
+}
+
+async function refreshGuestList() {
+    try {
+        const res = await fetch('/api/guests?page=1&keyword=');
+        const json = await res.json();
+        if (json.success) { guestsList = json.data.items; }
+    } catch (e) { console.error('刷新客人列表失败:', e); }
 }
 
 async function changeStatus(id, currentStatus) {
