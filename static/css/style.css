@@ -142,7 +142,7 @@ a:hover { text-decoration: underline; }
 }
 
 .nav-group.open .nav-sub {
-    max-height: 200px;
+    max-height: 300px;
 }
 
 .nav-group-toggle {
@@ -931,7 +931,18 @@ textarea.form-control {
     text-align: center;
 }
 
-.day-col.weekend { background: #fce7f3; }
+.day-col.weekend { background: #fbcfe8; }
+.day-col.holiday { background: #fef3c7 !important; }
+.day-col.holiday-eve { background: #fffbeb !important; }
+
+.holiday-name {
+    font-size: 9px;
+    color: #b45309;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 36px;
+}
 .day-col.today { background: #fdf2f8; border-bottom: 2px solid var(--primary); }
 
 .day-num {
@@ -1415,7 +1426,7 @@ textarea.form-control {
     gap: 8px;
 }
 
-.stats-mode-bar .btn.active {
+.stats-mode-bar .btn.active, .stats-mode-bar .btn[data-mode].active {
     background: var(--primary);
     color: #fff;
     border-color: var(--primary);

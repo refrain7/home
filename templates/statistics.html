@@ -4,37 +4,47 @@
 {% block content %}
 <div class="page-header">
     <h1>📈 统计报表</h1>
-    <div class="stats-mode-bar">
-        <button class="btn btn-outline active" id="btnYearly" onclick="switchMode('yearly')">📊 按年</button>
-        <button class="btn btn-outline" id="btnMonthly" onclick="switchMode('monthly')">📅 按月</button>
-        <button class="btn btn-outline" id="btnWeekly" onclick="switchMode('weekly')">📆 按周</button>
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-body" style="padding:12px 16px;">
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+            <div class="stats-mode-bar" style="display:flex;gap:6px;">
+                <button class="btn btn-sm active" data-mode="monthly" onclick="switchMode('monthly')">📅 按月</button>
+                <button class="btn btn-sm btn-outline" data-mode="weekly" onclick="switchMode('weekly')">📆 按周</button>
+                <button class="btn btn-sm btn-outline" data-mode="daily" onclick="switchMode('daily')">📋 按天</button>
+                <button class="btn btn-sm btn-outline" data-mode="rooms" onclick="switchMode('rooms')">🚪 按房间</button>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;flex:1;justify-content:flex-end;flex-wrap:wrap;">
+                <span style="font-size:13px;color:var(--gray-500);">房间:</span>
+                <select id="filterRooms" multiple style="min-width:120px;max-width:200px;height:64px;padding:2px 4px;border:1px solid var(--gray-300);border-radius:8px;font-size:12px;" onchange="loadStatistics()"></select>
+                <input type="date" id="filterDateFrom" onchange="loadStatistics()" style="padding:4px 8px;border:1px solid var(--gray-300);border-radius:8px;font-size:12px;width:135px;" title="开始日期" />
+                <span style="font-size:13px;color:var(--gray-500);">~</span>
+                <input type="date" id="filterDateTo" onchange="loadStatistics()" style="padding:4px 8px;border:1px solid var(--gray-300);border-radius:8px;font-size:12px;width:135px;" title="结束日期" />
+                <button class="btn btn-sm btn-outline" onclick="resetFilters()">🔄 本月</button>
+            </div>
+        </div>
     </div>
 </div>
+
+<div class="stats-grid" id="summaryGrid"></div>
 
 <div class="dashboard-grid">
-    <!-- 收入图表 -->
     <div class="card">
-        <div class="card-header">
-            <h3>💰 收入趋势</h3>
-        </div>
-        <div class="card-body">
-            <canvas id="incomeChart" height="280"></canvas>
-        </div>
+        <div class="card-header"><h3>💰 收支净利润</h3></div>
+        <div class="card-body"><canvas id="incomeChart" height="300"></canvas></div>
     </div>
-
-    <!-- 入住率图表 -->
-    <div class="card">
-        <div class="card-header">
-            <h3>📊 入住率趋势</h3>
-        </div>
-        <div class="card-body">
-            <canvas id="occupancyChart" height="280"></canvas>
-        </div>
+    <div class="card" id="occupancyCard">
+        <div class="card-header"><h3>📊 入住率趋势</h3></div>
+        <div class="card-body"><canvas id="occupancyChart" height="300"></canvas></div>
     </div>
 </div>
 
-<!-- 汇总数据卡片 -->
-<div class="stats-grid" id="summaryGrid">
+<div class="card" id="detailTable" style="display:none;">
+    <div class="card-header"><h3>📋 明细数据</h3></div>
+    <div class="card-body" style="max-height:400px;overflow-y:auto;">
+        <table class="table" id="detailTableBody"></table>
+    </div>
 </div>
 {% endblock %}
 
@@ -42,164 +52,129 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 let currentMode = 'monthly';
-let incomeChart = null;
-let occupancyChart = null;
+let incomeChart = null, occupancyChart = null;
+let roomsList = [];
 
-document.addEventListener('DOMContentLoaded', () => loadStatistics());
+document.addEventListener('DOMContentLoaded', async () => {
+    const rRes = await fetch('/api/rooms?page=1&keyword=');
+    const rJson = await rRes.json();
+    if (rJson.success) {
+        roomsList = rJson.data.items;
+        const sel = document.getElementById('filterRooms');
+        sel.innerHTML = '<option value="">全部</option>' + roomsList.map(r => `<option value="${r.id}">${escHtml(r.room_number)}</option>`).join('');
+    }
+    const now = new Date();
+    document.getElementById('filterDateFrom').value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+    document.getElementById('filterDateTo').value = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().slice(0,10);
+    loadStatistics();
+});
 
-async function loadStatistics() {
-    const year = new Date().getFullYear();
-    const month = new Date().getMonth() + 1;
-    const res = await fetch(`/api/statistics?mode=${currentMode}&year=${year}&month=${month}`);
-    const json = await res.json();
-    if (!json.success) return;
-
-    const d = json.data;
-    renderIncomeChart(d.labels, d.income);
-    renderOccupancyChart(d.labels, d.occupancy);
-    renderSummary(d);
+function getDateRange() {
+    const df = document.getElementById('filterDateFrom').value;
+    const dt = document.getElementById('filterDateTo').value;
+    if (df && dt) return { date_from: df, date_to: dt };
+    // fallback: 本月
+    const now = new Date();
+    const y = now.getFullYear(), m = now.getMonth();
+    return { date_from: `${y}-${String(m+1).padStart(2,'0')}-01`, date_to: `${y}-${String(m+1).padStart(2,'0')}-${new Date(y,m+1,0).getDate()}` };
 }
 
-function renderIncomeChart(labels, data) {
+async function loadStatistics() {
+    const sel = document.getElementById('filterRooms');
+    const roomIds = Array.from(sel.selectedOptions).filter(o => o.value).map(o => o.value).join(',');
+    const range = getDateRange();
+    const params = new URLSearchParams({ mode: currentMode, date_from: range.date_from, date_to: range.date_to });
+    if (roomIds) params.set('room_ids', roomIds);
+
+    const res = await fetch('/api/statistics?' + params);
+    const json = await res.json();
+    if (!json.success) return;
+    const d = json.data;
+
+    const hideOcc = currentMode === 'rooms' || currentMode === 'daily';
+    document.getElementById('occupancyCard').style.display = hideOcc ? 'none' : '';
+    document.getElementById('incomeChart').parentElement.parentElement.style.gridColumn = hideOcc ? '1 / -1' : '';
+
+    renderIncomeChart(d);
+    if (!hideOcc) renderOccupancyChart(d);
+    renderSummary(d);
+    renderDetailTable(d);
+}
+
+function renderIncomeChart(d) {
     const ctx = document.getElementById('incomeChart').getContext('2d');
     if (incomeChart) incomeChart.destroy();
-
-    const gradient = ctx.createLinearGradient(0, 0, 0, 280);
-    gradient.addColorStop(0, 'rgba(16, 185, 129, 0.3)');
-    gradient.addColorStop(1, 'rgba(16, 185, 129, 0.02)');
-
+    const profits = d.income.map((v,i) => v - (d.expense[i]||0));
     incomeChart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: labels,
-            datasets: [{
-                label: '收入 (元)',
-                data: data,
-                backgroundColor: gradient,
-                borderColor: '#10b981',
-                borderWidth: 2,
-                borderRadius: 6,
-                hoverBackgroundColor: 'rgba(16, 185, 129, 0.5)',
-            }]
+            labels: d.labels,
+            datasets: [
+                { label: '收入', data: d.income, backgroundColor: 'rgba(16,185,129,0.65)', borderColor: '#10b981', borderWidth: 1, borderRadius: 4, order: 2 },
+                { label: '支出', data: d.expense.map(v=>-v), backgroundColor: 'rgba(239,68,68,0.55)', borderColor: '#ef4444', borderWidth: 1, borderRadius: 4, order: 2 },
+                { label: '净利润', data: profits, type: 'line', borderColor: '#3b82f6', backgroundColor: 'transparent', borderWidth: 3, pointRadius: 4, pointBackgroundColor: '#3b82f6', tension: 0.3, order: 1 }
+            ]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        label: ctx => '¥' + ctx.parsed.y.toFixed(2)
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: v => '¥' + v
-                    }
-                }
-            }
+            responsive: true, maintainAspectRatio: false,
+            plugins: { tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ¥' + Math.abs(ctx.parsed.y).toFixed(2) } } },
+            scales: { y: { beginAtZero: true, ticks: { callback: v => '¥' + v } } }
         }
     });
 }
 
-function renderOccupancyChart(labels, data) {
+function renderOccupancyChart(d) {
     const ctx = document.getElementById('occupancyChart').getContext('2d');
     if (occupancyChart) occupancyChart.destroy();
-
-    const gradient = ctx.createLinearGradient(0, 0, 0, 280);
-    gradient.addColorStop(0, 'rgba(59, 130, 246, 0.25)');
-    gradient.addColorStop(1, 'rgba(59, 130, 246, 0.02)');
-
     occupancyChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: '入住率 (%)',
-                data: data,
-                borderColor: '#3b82f6',
-                backgroundColor: gradient,
-                borderWidth: 3,
-                fill: true,
-                tension: 0.4,
-                pointBackgroundColor: '#3b82f6',
-                pointBorderColor: '#fff',
-                pointBorderWidth: 2,
-                pointRadius: 5,
-                pointHoverRadius: 7,
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        label: ctx => ctx.parsed.y.toFixed(1) + '%'
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 100,
-                    ticks: {
-                        callback: v => v + '%'
-                    }
-                }
-            }
-        }
+        type: 'line', data: { labels: d.labels, datasets: [{ label: '入住率', data: d.occupancy, borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,0.1)', borderWidth: 3, fill: true, tension: 0.4, pointRadius: 4, pointBackgroundColor: '#8b5cf6' }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { callbacks: { label: ctx => ctx.parsed.y.toFixed(1) + '%' } } }, scales: { y: { min: 0, max: 100, ticks: { callback: v => v + '%' } } } }
     });
 }
 
 function renderSummary(d) {
-    const totalIncome = d.income.reduce((a, b) => a + b, 0);
-    const avgOccupancy = d.occupancy.length > 0
-        ? (d.occupancy.reduce((a, b) => a + b, 0) / d.occupancy.length).toFixed(1)
-        : 0;
-    const maxIncome = Math.max(...d.income, 0);
-    const maxIdx = d.income.indexOf(maxIncome);
-
+    const profit = d.total_profit || 0;
+    const roomsInfo = d.rooms && d.rooms.length > 0 && d.rooms.length < roomsList.length ? d.rooms.map(r => r.room_number).join(',') : '全部';
     document.getElementById('summaryGrid').innerHTML = `
-        <div class="stat-card">
-            <div class="stat-icon" style="background:#d1fae5;color:#059669;">💰</div>
-            <div class="stat-info">
-                <span class="stat-value">¥${totalIncome.toFixed(2)}</span>
-                <span class="stat-label">总收入</span>
-            </div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon" style="background:#dbeafe;color:#2563eb;">📊</div>
-            <div class="stat-info">
-                <span class="stat-value">${avgOccupancy}%</span>
-                <span class="stat-label">平均入住率</span>
-            </div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon" style="background:#fef3c7;color:#b45309;">🏆</div>
-            <div class="stat-info">
-                <span class="stat-value">¥${maxIncome.toFixed(2)}</span>
-                <span class="stat-label">最高收入${maxIdx >= 0 ? ' (' + d.labels[maxIdx] + ')' : ''}</span>
-            </div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon" style="background:#fce7f3;color:#db2777;">📅</div>
-            <div class="stat-info">
-                <span class="stat-value">${d.labels.length}</span>
-                <span class="stat-label">统计周期数</span>
-            </div>
-        </div>`;
+        <div class="stat-card"><div class="stat-icon" style="background:#d1fae5;color:#059669;">💰</div><div class="stat-info"><span class="stat-value">¥${(d.total_income||0).toFixed(2)}</span><span class="stat-label">总收入</span></div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:#fee2e2;color:#dc2626;">💸</div><div class="stat-info"><span class="stat-value">¥${(d.total_expense||0).toFixed(2)}</span><span class="stat-label">总支出</span></div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:${profit>=0?'#d1fae5':'#fee2e2'};color:${profit>=0?'#059669':'#dc2626'};">${profit>=0?'📈':'📉'}</div><div class="stat-info"><span class="stat-value" style="color:${profit>=0?'var(--success)':'var(--danger)'};">¥${profit.toFixed(2)}</span><span class="stat-label">净利润</span></div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:#ede9fe;color:#7c3aed;">📊</div><div class="stat-info"><span class="stat-value">${d.avg_occupancy||0}%</span><span class="stat-label">平均入住率</span></div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:#e0f2fe;color:#0284c7;">🚪</div><div class="stat-info"><span class="stat-value" style="font-size:14px;">${roomsInfo}</span><span class="stat-label">筛选房间</span></div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:#fef3c7;color:#b45309;">📅</div><div class="stat-info"><span class="stat-value" style="font-size:14px;">${d.date_from||''} ~ ${d.date_to||''}</span><span class="stat-label">统计区间</span></div></div>`;
+}
+
+function renderDetailTable(d) {
+    const tbl = document.getElementById('detailTableBody');
+    let html = '<thead><tr><th>周期</th><th>收入</th><th>支出</th><th>净利润</th><th>入住率</th></tr></thead><tbody>';
+    for (let i = 0; i < d.labels.length; i++) {
+        const p = d.income[i] - (d.expense[i]||0);
+        html += `<tr>
+            <td>${d.labels[i]}</td>
+            <td style="color:#059669;">¥${d.income[i].toFixed(2)}</td>
+            <td style="color:#dc2626;">¥${(d.expense[i]||0).toFixed(2)}</td>
+            <td style="color:${p>=0?'#059669':'#dc2626'};">¥${p.toFixed(2)}</td>
+            <td>${(d.occupancy[i]||0).toFixed(1)}%</td>
+        </tr>`;
+    }
+    html += '</tbody>';
+    tbl.innerHTML = html;
+    document.getElementById('detailTable').style.display = d.labels.length > 0 ? '' : 'none';
 }
 
 function switchMode(mode) {
     currentMode = mode;
     document.querySelectorAll('.stats-mode-bar .btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('btn' + mode.charAt(0).toUpperCase() + mode.slice(1)).classList.add('active');
+    document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
     loadStatistics();
+}
+
+function resetFilters() {
+    document.getElementById('filterRooms').selectedIndex = 0;
+    const now = new Date();
+    document.getElementById('filterDateFrom').value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+    document.getElementById('filterDateTo').value = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().slice(0,10);
+    switchMode('monthly');
 }
 </script>
 {% endblock %}

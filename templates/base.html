@@ -27,7 +27,7 @@
                 <span>日历视图</span>
             </a>
             <!-- 基础信息（可折叠） -->
-            <div class="nav-group {% if request.path in ('/room-types','/rooms','/guests','/booking-sources') %}open{% endif %}" id="navGroupBase">
+            <div class="nav-group {% if request.path in ('/room-types','/rooms','/guests','/booking-sources','/holidays') %}open{% endif %}" id="navGroupBase">
                 <div class="nav-item nav-group-toggle" onclick="document.getElementById('navGroupBase').classList.toggle('open')">
                     <span class="nav-icon">📂</span>
                     <span>基础信息</span>
@@ -50,8 +50,16 @@
                         <span class="nav-icon">🏷️</span>
                         <span>预订来源</span>
                     </a>
+                    <a href="{{ url_for('holidays_page') }}" class="nav-item nav-sub-item {% if request.path == '/holidays' %}active{% endif %}">
+                        <span class="nav-icon">🎉</span>
+                        <span>节假日</span>
+                    </a>
                 </div>
             </div>
+            <a href="{{ url_for('expenses_page') }}" class="nav-item {% if request.path == '/expenses' %}active{% endif %}">
+                <span class="nav-icon">💸</span>
+                <span>支出管理</span>
+            </a>
             <a href="{{ url_for('logs_page') }}" class="nav-item {% if request.path == '/logs' %}active{% endif %}">
                 <span class="nav-icon">📝</span>
                 <span>系统日志</span>
