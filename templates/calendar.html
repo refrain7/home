@@ -29,7 +29,7 @@
             <span class="legend-item"><span class="legend-color" style="background:#3b82f6;"></span> 已确认</span>
             <span class="legend-item"><span class="legend-color" style="background:#10b981;"></span> 已入住</span>
             <span class="legend-item"><span class="legend-color" style="background:#6b7280;"></span> 已退房</span>
-            <span class="legend-item"><span class="legend-color" style="background:#ec4899;width:14px;height:4px;border-radius:2px;display:inline-block;"></span> 特殊价格</span>
+            <span class="legend-item"><span class="legend-color" style="background:#ec4899;width:14px;height:4px;border-radius:2px;display:inline-block;"></span> 每日定价</span>
         </div>
     </div>
 </div>
@@ -104,20 +104,20 @@ function renderCalendar() {
                 cellClass = 'has-booking';
                 cellTitle = dayEvents.map(e => e.title).join(', ');
             }
-            if (specialPrice) {
-                cellClass += ' has-special-price';
-                cellTitle = (cellTitle ? cellTitle + ' | ' : '') + `特殊价格: ¥${specialPrice.price}`;
+            if (specialPrice && specialPrice.price > 0) {
+                cellClass += ' has-daily-price';
+                cellTitle = (cellTitle ? cellTitle + ' | ' : '') + `日价: ¥${specialPrice.price}`;
             }
 
             html += `<td class="day-cell ${cellClass}" title="${cellTitle}" 
-                         onclick="openPriceModal(${room.id}, '${dateStr}', '${escHtml(room.room_number)}', ${specialPrice ? specialPrice.price : 'null'}, ${specialPrice ? specialPrice.id : 'null'}, '${specialPrice ? escHtml(specialPrice.reason || '') : ''}')">`;
+                         onclick="openPriceModal(${room.id}, '${dateStr}', '${escHtml(room.room_number)}', ${specialPrice && specialPrice.price > 0 ? specialPrice.price : 'null'}, ${specialPrice ? specialPrice.id : 'null'}, '${specialPrice ? escHtml(specialPrice.note || '') : ''}')">`;
             dayEvents.forEach(e => {
                 const isStart = e.start === dateStr;
                 html += `<div class="booking-bar" style="background:${e.color};" title="${escHtml(e.title)}">
                     ${isStart ? escHtml(e.title.substring(0,2)) : ''}
                 </div>`;
             });
-            if (specialPrice) {
+            if (specialPrice && specialPrice.price > 0) {
                 html += `<div class="price-dot" title="¥${specialPrice.price}">¥${specialPrice.price}</div>`;
             }
             html += '</td>';
@@ -129,12 +129,12 @@ function renderCalendar() {
     document.getElementById('calendarContainer').innerHTML = html;
 }
 
-// ==================== 特殊价格弹窗 ====================
+// ==================== 每日价格弹窗 ====================
 
-function openPriceModal(roomId, dateStr, roomNumber, currentPrice, priceId, reason) {
-    const isDelete = currentPrice !== null;
+function openPriceModal(roomId, dateStr, roomNumber, currentPrice, priceId, note) {
+    const hasPrice = currentPrice !== null && currentPrice > 0;
     document.getElementById('modalTitle').textContent = 
-        `💰 设置价格 - ${escHtml(roomNumber)} (${dateStr})`;
+        `💰 每日价格 - ${escHtml(roomNumber)} (${dateStr})`;
 
     document.getElementById('modalBody').innerHTML = `
         <form id="priceForm">
@@ -143,19 +143,19 @@ function openPriceModal(roomId, dateStr, roomNumber, currentPrice, priceId, reas
             <input type="hidden" id="priceId" value="${priceId || ''}">
             <div class="form-row">
                 <div class="form-group">
-                    <label>特殊价格 (元/晚) <span class="required">*</span></label>
+                    <label>价格 (元/晚) <span class="required">*</span></label>
                     <input type="number" id="priceValue" class="form-control" step="0.01" 
-                           value="${currentPrice || ''}" placeholder="留空或0表示恢复默认价格" autofocus>
+                           value="${currentPrice || ''}" placeholder="0 表示清除价格" autofocus>
                 </div>
             </div>
             <div class="form-group">
-                <label>调价原因</label>
-                <input type="text" id="priceReason" class="form-control" 
-                       value="${reason || ''}" placeholder="如: 节假日、旺季、活动等">
+                <label>备注</label>
+                <input type="text" id="priceNote" class="form-control" 
+                       value="${note || ''}" placeholder="如: 含早、折扣价等">
             </div>
         </form>`;
     document.getElementById('modalFooter').innerHTML = `
-        ${isDelete ? `<button class="btn btn-danger" onclick="deletePrice(${priceId})">删除特殊价格</button>` : ''}
+        ${hasPrice ? `<button class="btn btn-danger" onclick="deletePrice(${priceId})">清除价格</button>` : ''}
         <button class="btn btn-outline" onclick="closeModal()">取消</button>
         <button class="btn btn-primary" onclick="savePrice()">保存</button>`;
     openModal();
@@ -165,18 +165,18 @@ async function savePrice() {
     const roomId = parseInt(document.getElementById('priceRoomId').value);
     const date = document.getElementById('priceDate').value;
     const price = parseFloat(document.getElementById('priceValue').value) || 0;
-    const reason = document.getElementById('priceReason').value.trim();
+    const note = document.getElementById('priceNote').value.trim();
 
     try {
-        const res = await fetch('/api/special-prices', {
+        const res = await fetch('/api/daily-prices', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ room_id: roomId, date, price, reason })
+            body: JSON.stringify({ room_id: roomId, date, price, note })
         });
         const json = await res.json();
         if (json.success) {
             closeModal();
-            showToast(price > 0 ? '价格已设置' : '价格已清除', 'success');
+            showToast(price > 0 ? '价格已更新' : '价格已清除', 'success');
             loadCalendar();
         } else {
             showToast(json.error || '操作失败', 'error');
@@ -187,13 +187,13 @@ async function savePrice() {
 }
 
 async function deletePrice(priceId) {
-    if (!confirm('确定要删除此特殊价格吗？')) return;
+    if (!confirm('确定要清除此日期的价格吗？')) return;
     try {
-        const res = await fetch(`/api/special-prices/${priceId}`, { method: 'DELETE' });
+        const res = await fetch(`/api/daily-prices/${priceId}`, { method: 'DELETE' });
         const json = await res.json();
         if (json.success) {
             closeModal();
-            showToast('特殊价格已删除', 'success');
+            showToast('价格已清除', 'success');
             loadCalendar();
         } else {
             showToast(json.error || '删除失败', 'error');

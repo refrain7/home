@@ -59,6 +59,26 @@ let currentPage = 1;
 let guestsList = [];
 let roomsList = [];
 
+function autoCalcTotal() {
+    const dailyPrice = parseFloat(document.getElementById('bookingDailyPrice').value) || 0;
+    const checkIn = document.getElementById('bookingCheckIn').value;
+    const checkOut = document.getElementById('bookingCheckOut').value;
+    if (dailyPrice > 0 && checkIn && checkOut) {
+        const days = Math.max(1, (new Date(checkOut) - new Date(checkIn)) / 86400000);
+        document.getElementById('bookingTotalPrice').value = (dailyPrice * days).toFixed(2);
+    }
+}
+
+function autoCalcDaily() {
+    const totalPrice = parseFloat(document.getElementById('bookingTotalPrice').value) || 0;
+    const checkIn = document.getElementById('bookingCheckIn').value;
+    const checkOut = document.getElementById('bookingCheckOut').value;
+    if (totalPrice > 0 && checkIn && checkOut) {
+        const days = Math.max(1, (new Date(checkOut) - new Date(checkIn)) / 86400000);
+        document.getElementById('bookingDailyPrice').value = (totalPrice / days).toFixed(2);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     // 预加载客人和房间列表
     const [gRes, rRes] = await Promise.all([
@@ -164,8 +184,12 @@ function showBookingForm(data = null) {
                     <input type="number" id="bookingGuestCount" class="form-control" value="${data ? data.guest_count : 1}" min="1">
                 </div>
                 <div class="form-group">
-                    <label>总金额</label>
-                    <input type="number" id="bookingTotalPrice" class="form-control" step="0.01" value="${data ? data.total_price : 0}">
+                    <label>每日价格 (元)</label>
+                    <input type="number" id="bookingDailyPrice" class="form-control" step="0.01" value="${data ? (data.total_price && data.check_in_date && data.check_out_date ? (data.total_price / Math.max(1, (new Date(data.check_out_date) - new Date(data.check_in_date)) / 86400000)).toFixed(2) : '') : ''}" placeholder="自动计算总价" oninput="autoCalcTotal()">
+                </div>
+                <div class="form-group">
+                    <label>总金额 <span class="required">*</span></label>
+                    <input type="number" id="bookingTotalPrice" class="form-control" step="0.01" value="${data ? data.total_price : 0}" required oninput="autoCalcDaily()">
                 </div>
                 <div class="form-group">
                     <label>押金</label>
@@ -217,9 +241,37 @@ async function saveBooking() {
 
     const url = id ? `/api/bookings/${id}` : '/api/bookings';
     const method = id ? 'PUT' : 'POST';
+    
+    // 编辑时：询问是否覆盖每日价格
+    if (id) {
+        _pendingBookingSave = { url, method, data };
+        document.getElementById('modalTitle').textContent = '更新预订';
+        document.getElementById('modalBody').innerHTML = `
+            <p>是否<strong>覆盖</strong>该日期范围内的每日价格为预订均价？</p>
+            <p class="text-muted text-sm">选择「覆盖」将把日期范围内已有的手动定价也一并替换。<br>选择「仅更新预订」则只更新预订，保留已有的手动定价。</p>`;
+        document.getElementById('modalFooter').innerHTML = `
+            <button class="btn btn-outline" onclick="confirmSaveBooking(false)">仅更新预订</button>
+            <button class="btn btn-primary" onclick="confirmSaveBooking(true)">覆盖每日价格</button>`;
+        return;
+    }
+    
+    // 新增预订：直接保存
     const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
     const json = await res.json();
-    if (json.success) { closeModal(); loadBookings(); showToast(id ? '预订已更新' : '预订已新增', 'success'); }
+    if (json.success) { closeModal(); loadBookings(); showToast('预订已新增', 'success'); }
+    else { showToast(json.error || '操作失败', 'error'); }
+}
+
+let _pendingBookingSave = null;
+
+async function confirmSaveBooking(forceOverwrite) {
+    const { url, method, data } = _pendingBookingSave;
+    _pendingBookingSave = null;
+    
+    const finalUrl = forceOverwrite ? url + '?force_overwrite=1' : url;
+    const res = await fetch(finalUrl, { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+    const json = await res.json();
+    if (json.success) { closeModal(); loadBookings(); showToast('预订已更新', 'success'); }
     else { showToast(json.error || '操作失败', 'error'); }
 }
 
@@ -407,10 +459,27 @@ async function confirmChangeStatus(id) {
 }
 
 async function deleteBooking(id) {
-    if (!confirm('确定要删除此预订吗？')) return;
-    const res = await fetch(`/api/bookings/${id}`, { method: 'DELETE' });
+    _pendingDeleteId = id;
+    document.getElementById('modalTitle').textContent = '删除预订';
+    document.getElementById('modalBody').innerHTML = `
+        <p>确定要<strong>删除</strong>此预订吗？</p>
+        <p class="text-muted text-sm">是否同时清除该日期范围内的每日价格？<br>清除后日历上将不再显示这些日期的定价。</p>`;
+    document.getElementById('modalFooter').innerHTML = `
+        <button class="btn btn-outline" onclick="closeModal()">取消</button>
+        <button class="btn btn-outline" onclick="confirmDeleteBooking(false)">仅删预订</button>
+        <button class="btn btn-danger" onclick="confirmDeleteBooking(true)">同时清除价格</button>`;
+    openModal();
+}
+
+let _pendingDeleteId = null;
+
+async function confirmDeleteBooking(deletePrices) {
+    const id = _pendingDeleteId;
+    _pendingDeleteId = null;
+    const url = deletePrices ? `/api/bookings/${id}?delete_prices=1` : `/api/bookings/${id}`;
+    const res = await fetch(url, { method: 'DELETE' });
     const json = await res.json();
-    if (json.success) { loadBookings(); showToast('预订已删除', 'success'); }
+    if (json.success) { closeModal(); loadBookings(); showToast('预订已删除', 'success'); }
     else { showToast(json.error || '删除失败', 'error'); }
 }
 </script>

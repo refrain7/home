@@ -91,6 +91,12 @@ def diary_page():
     return render_template('diary.html')
 
 
+@app.route('/statistics')
+def statistics_page():
+    """统计页面"""
+    return render_template('statistics.html')
+
+
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
     """访问上传的文件"""
@@ -121,22 +127,31 @@ def api_dashboard():
         active_bookings = [b for b in bookings
                            if b.get('status') in ('confirmed', 'checked_in')]
 
-        # 今日收入（已入住和今日退房的预订）
+        # 今日收入 = 所有房间今日价格之和
+        today_prices = DataManager.read_json(DAILY_PRICES_FILE, [])
         today_income = sum(
-            float(b.get('total_price', 0))
-            for b in bookings
-            if (b.get('status') == 'checked_in' or
-                b.get('check_out_date') == today)
+            float(p.get('price', 0)) for p in today_prices
+            if p.get('date') == today
         )
+        # 加上今日额外收入
+        extra_incomes = DataManager.read_json(EXTRA_INCOME_FILE, [])
+        today_extra = sum(
+            float(e.get('amount', 0)) for e in extra_incomes
+            if e.get('date') == today
+        )
+        today_income += today_extra
 
-        # 本月收入
+        # 本月收入 = 所有房间本月每日价格之和 + 本月额外收入
         current_month = datetime.now().strftime('%Y-%m')
-        month_income = sum(
-            float(b.get('total_price', 0))
-            for b in bookings
-            if b.get('check_in_date', '').startswith(current_month) and
-               b.get('status') not in ('cancelled', 'no_show')
+        month_prices_sum = sum(
+            float(p.get('price', 0)) for p in today_prices
+            if p.get('date', '').startswith(current_month)
         )
+        month_extra = sum(
+            float(e.get('amount', 0)) for e in extra_incomes
+            if e.get('date', '').startswith(current_month)
+        )
+        month_income = month_prices_sum + month_extra
 
         # 入住率
         occupancy_rate = round((occupied / total_rooms * 100), 1) if total_rooms > 0 else 0
@@ -163,6 +178,8 @@ def api_dashboard():
                 'active_bookings': len(active_bookings),
                 'today_income': round(today_income, 2),
                 'month_income': round(month_income, 2),
+                'month_prices_sum': round(month_prices_sum, 2),
+                'month_extra': round(month_extra, 2),
                 'occupancy_rate': occupancy_rate,
                 'recent_bookings': recent_bookings,
                 'recent_logs': logs_data['items']
@@ -604,6 +621,10 @@ def api_bookings():
             bookings.append(new_booking)
             DataManager.write_json(BOOKINGS_FILE, bookings)
 
+            # 自动填充每日价格到日历
+            _auto_fill_daily_prices(room_id, check_in, check_out,
+                                    float(data.get('total_price', 0)))
+
             # 更新房间状态
             rooms = DataManager.read_json(ROOMS_FILE, [])
             DataManager.update_by_id(rooms, room_id, {'status': 'reserved'})
@@ -654,6 +675,14 @@ def api_booking_detail(booking_id):
             if DataManager.update_by_id(bookings, booking_id, updates):
                 DataManager.write_json(BOOKINGS_FILE, bookings)
 
+                # 自动更新每日价格（支持强制覆盖）
+                force = request.args.get('force_overwrite') == '1'
+                _auto_fill_daily_prices(
+                    updates['room_id'], updates['check_in_date'],
+                    updates['check_out_date'], updates['total_price'],
+                    force=force
+                )
+
                 # 同步更新房间状态
                 new_status = updates['status']
                 room_id = updates['room_id']
@@ -696,6 +725,14 @@ def api_booking_detail(booking_id):
                 DataManager.update_by_id(rooms, booking['room_id'],
                                          {'status': 'available'})
                 DataManager.write_json(ROOMS_FILE, rooms)
+
+                # 是否同时删除每日价格
+                if request.args.get('delete_prices') == '1':
+                    _delete_daily_prices_range(
+                        booking['room_id'],
+                        booking.get('check_in_date', ''),
+                        booking.get('check_out_date', '')
+                    )
             SystemLogger.info('删除预订', f'预订ID: {booking_id}')
             return jsonify({'success': True})
         return jsonify({'success': False, 'error': '预订不存在'}), 404
@@ -745,6 +782,116 @@ def api_search():
     return jsonify({'success': True, 'data': results})
 
 
+# ==================== API：统计分析 ====================
+
+@app.route('/api/statistics')
+def api_statistics():
+    """获取统计数据：收入、入住率按年/月/周"""
+    mode = request.args.get('mode', 'monthly')  # yearly, monthly, weekly
+    year = int(request.args.get('year', datetime.now().year))
+    month = int(request.args.get('month', 0))  # 仅 weekly 模式用
+
+    daily_prices = DataManager.read_json(DAILY_PRICES_FILE, [])
+    extra_incomes = DataManager.read_json(EXTRA_INCOME_FILE, [])
+    bookings = DataManager.read_json(BOOKINGS_FILE, [])
+    rooms = DataManager.read_json(ROOMS_FILE, [])
+    room_count = len(rooms)
+
+    labels = []
+    income_data = []
+    occupancy_data = []
+
+    if mode == 'yearly':
+        # 按年汇总：展示每年的数据
+        for y in range(year - 4, year + 1):
+            labels.append(str(y))
+            y_str = str(y)
+            income = sum(float(p.get('price', 0)) for p in daily_prices
+                        if p.get('date', '').startswith(y_str))
+            income += sum(float(e.get('amount', 0)) for e in extra_incomes
+                         if e.get('date', '').startswith(y_str))
+            income_data.append(round(income, 2))
+
+            # 入住率 = 有价格的天数 / (房间数 × 365)
+            priced_days = sum(1 for p in daily_prices
+                            if p.get('date', '').startswith(y_str) and p.get('price', 0) > 0)
+            total_possible = room_count * 365 if room_count > 0 else 1
+            occupancy_data.append(round(priced_days / total_possible * 100, 1))
+
+    elif mode == 'monthly':
+        # 按年-月汇总
+        for m in range(1, 13):
+            labels.append(f'{m}月')
+            ym = f'{year}-{m:02d}'
+            income = sum(float(p.get('price', 0)) for p in daily_prices
+                        if p.get('date', '').startswith(ym))
+            income += sum(float(e.get('amount', 0)) for e in extra_incomes
+                         if e.get('date', '').startswith(ym))
+            income_data.append(round(income, 2))
+
+            # 入住率 = 当月有价格的天数 / (房间数 × 当月天数)
+            days_in_month = [31, 28 + (1 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 0),
+                            31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1]
+            priced_days = sum(1 for p in daily_prices
+                            if p.get('date', '').startswith(ym) and p.get('price', 0) > 0)
+            total_possible = room_count * days_in_month if room_count > 0 else 1
+            occupancy_data.append(round(priced_days / total_possible * 100, 1))
+
+    elif mode == 'weekly':
+        # 按周汇总（指定月的每周）
+        if month <= 0:
+            month = datetime.now().month
+        # 计算该月第一天和最后一天
+        days_in_month = [31, 28 + (1 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 0),
+                        31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1]
+        first_date = parse_date(f'{year}-{month:02d}-01')
+        last_date = parse_date(f'{year}-{month:02d}-{days_in_month}')
+        # 从第一个周一开始分周
+        current_week_start = first_date
+        week_num = 1
+        while current_week_start <= last_date:
+            week_end = min(current_week_start + timedelta(days=6), last_date)
+            labels.append(f'第{week_num}周')
+            week_num += 1
+
+            # 收入
+            income = 0
+            d = current_week_start
+            while d <= week_end:
+                ds = d.strftime('%Y-%m-%d')
+                income += sum(float(p.get('price', 0)) for p in daily_prices
+                            if p.get('date') == ds)
+                income += sum(float(e.get('amount', 0)) for e in extra_incomes
+                            if e.get('date') == ds)
+                d += timedelta(days=1)
+            income_data.append(round(income, 2))
+
+            # 入住率 = 本周有价格的天数 / (房间数 × 本周天数)
+            priced_days = 0
+            days_in_week = 0
+            d = current_week_start
+            while d <= week_end:
+                ds = d.strftime('%Y-%m-%d')
+                priced_days += sum(1 for p in daily_prices
+                                 if p.get('date') == ds and p.get('price', 0) > 0)
+                days_in_week += 1
+                d += timedelta(days=1)
+            total_possible = room_count * days_in_week if room_count > 0 else 1
+            occupancy_data.append(round(priced_days / total_possible * 100, 1))
+
+            current_week_start += timedelta(days=7)
+
+    return jsonify({
+        'success': True,
+        'data': {
+            'mode': mode,
+            'labels': labels,
+            'income': income_data,
+            'occupancy': occupancy_data
+        }
+    })
+
+
 # ==================== API：日历数据 ====================
 
 @app.route('/api/calendar-data')
@@ -786,8 +933,8 @@ def api_calendar_data():
             'color': _get_status_color(b['status'])
         })
 
-    # 筛选该月的特殊价格
-    all_prices = DataManager.read_json(PRICES_FILE, [])
+    # 筛选该月的每日价格
+    all_prices = DataManager.read_json(DAILY_PRICES_FILE, [])
     month_prices = {}
     for p in all_prices:
         if p.get('date', '').startswith(f'{year}-{month:02d}'):
@@ -814,6 +961,77 @@ def _get_status_color(status):
         'checked_out': '#6b7280',  # 灰色
     }
     return colors.get(status, '#6b7280')
+
+
+def _auto_fill_daily_prices(room_id, check_in, check_out, total_price, force=False):
+    """预订时自动将日均价填入日历日期范围"""
+    try:
+        start = parse_date(check_in)
+        end = parse_date(check_out)
+        if not start or not end:
+            return
+        days = (end - start).days
+        if days <= 0:
+            return
+        daily = round(total_price / days, 2)
+
+        prices = DataManager.read_json(DAILY_PRICES_FILE, [])
+        existing_map = {}
+        for p in prices:
+            existing_map[(p.get('room_id'), p.get('date'))] = p
+
+        current = start
+        while current < end:
+            date_str = current.strftime('%Y-%m-%d')
+            key = (room_id, date_str)
+            if key in existing_map:
+                if force:
+                    # 强制覆盖已有价格
+                    existing_map[key]['price'] = daily
+                    existing_map[key]['note'] = '预订覆盖'
+                    existing_map[key]['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                new_p = {
+                    'id': DataManager.generate_id(prices),
+                    'room_id': room_id,
+                    'date': date_str,
+                    'price': daily,
+                    'note': '自动填价',
+                    'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                }
+                prices.append(new_p)
+                existing_map[key] = new_p
+            current += timedelta(days=1)
+
+        DataManager.write_json(DAILY_PRICES_FILE, prices)
+    except Exception:
+        pass  # 自动填价失败不影响预订
+
+
+def _delete_daily_prices_range(room_id, check_in, check_out):
+    """删除指定日期范围内的每日价格"""
+    try:
+        start = parse_date(check_in)
+        end = parse_date(check_out)
+        if not start or not end:
+            return
+        prices = DataManager.read_json(DAILY_PRICES_FILE, [])
+        to_delete = set()
+        current = start
+        while current < end:
+            date_str = current.strftime('%Y-%m-%d')
+            for i, p in enumerate(prices):
+                if p.get('room_id') == room_id and p.get('date') == date_str:
+                    to_delete.add(i)
+            current += timedelta(days=1)
+        if to_delete:
+            prices = [p for i, p in enumerate(prices) if i not in to_delete]
+            DataManager.write_json(DAILY_PRICES_FILE, prices)
+            SystemLogger.info('清除每日价格',
+                              f'房间{room_id} {check_in}~{check_out}, 共{len(to_delete)}天')
+    except Exception:
+        pass
 
 
 # ==================== API：图片上传 ====================
@@ -903,7 +1121,9 @@ def api_export():
     if data_type in ('all', 'logs'):
         export_data['logs'] = DataManager.read_json(LOGS_FILE, [])
     if data_type in ('all', 'special_prices'):
-        export_data['special_prices'] = DataManager.read_json(PRICES_FILE, [])
+        export_data['daily_prices'] = DataManager.read_json(DAILY_PRICES_FILE, [])
+    if data_type in ('all', 'extra_income'):
+        export_data['extra_income'] = DataManager.read_json(EXTRA_INCOME_FILE, [])
     if data_type in ('all', 'diary'):
         export_data['diary'] = DataManager.read_json(DIARY_FILE, [])
 
@@ -927,7 +1147,9 @@ def api_import():
             ('rooms', ROOMS_FILE),
             ('guests', GUESTS_FILE),
             ('bookings', BOOKINGS_FILE),
-            ('special_prices', PRICES_FILE),
+            ('special_prices', DAILY_PRICES_FILE),
+            ('daily_prices', DAILY_PRICES_FILE),
+            ('extra_income', EXTRA_INCOME_FILE),
             ('diary', DIARY_FILE),
         ]:
             if key in data and isinstance(data[key], list):
@@ -940,12 +1162,12 @@ def api_import():
         return jsonify({'success': False, 'error': str(e)}), 400
 
 
-# ==================== API：特殊价格管理（日历点击设置） ====================
+# ==================== API：每日价格管理（日历点击设置） ====================
 
-@app.route('/api/special-prices', methods=['GET', 'POST'])
-def api_special_prices():
+@app.route('/api/daily-prices', methods=['GET', 'POST'])
+def api_daily_prices():
     if request.method == 'GET':
-        prices = DataManager.read_json(PRICES_FILE, [])
+        prices = DataManager.read_json(DAILY_PRICES_FILE, [])
         room_id = request.args.get('room_id', '')
         date = request.args.get('date', '')
         if room_id:
@@ -957,50 +1179,122 @@ def api_special_prices():
     elif request.method == 'POST':
         try:
             data = request.get_json()
-            prices = DataManager.read_json(PRICES_FILE, [])
+            prices = DataManager.read_json(DAILY_PRICES_FILE, [])
             room_id = int(data.get('room_id', 0))
             date = data.get('date', '').strip()
+            price_val = float(data.get('price', 0))
 
-            # 检查是否已存在
+            # 价格为 0 或负数 → 删除记录（清除价格）
+            if price_val <= 0:
+                existing = [p for p in prices
+                            if p.get('room_id') == room_id and p.get('date') == date]
+                if existing:
+                    DataManager.delete_by_id(prices, existing[0]['id'])
+                    DataManager.write_json(DAILY_PRICES_FILE, prices)
+                    SystemLogger.info('清除每日价格', f'房间{room_id} {date}')
+                return jsonify({'success': True, 'data': None, 'cleared': True})
+
+            # 检查是否已存在，直接覆盖
             existing = [p for p in prices
                         if p.get('room_id') == room_id and p.get('date') == date]
             if existing:
-                existing[0]['price'] = float(data.get('price', 0))
-                existing[0]['reason'] = data.get('reason', '').strip()
+                existing[0]['price'] = price_val
+                existing[0]['note'] = data.get('note', '').strip()
                 existing[0]['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                DataManager.write_json(PRICES_FILE, prices)
-                SystemLogger.info('更新特殊价格',
-                                  f'房间{room_id} {date}: ¥{data.get("price", 0)}')
+                DataManager.write_json(DAILY_PRICES_FILE, prices)
+                SystemLogger.info('更新每日价格',
+                                  f'房间{room_id} {date}: ¥{price_val}')
                 return jsonify({'success': True, 'data': existing[0], 'updated': True})
 
             new_price = {
                 'id': DataManager.generate_id(prices),
                 'room_id': room_id,
                 'date': date,
-                'price': float(data.get('price', 0)),
-                'reason': data.get('reason', '').strip(),
+                'price': price_val,
+                'note': data.get('note', '').strip(),
                 'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             }
             prices.append(new_price)
-            DataManager.write_json(PRICES_FILE, prices)
-            SystemLogger.info('设置特殊价格',
-                              f'房间{room_id} {date}: ¥{data.get("price", 0)}')
+            DataManager.write_json(DAILY_PRICES_FILE, prices)
+            SystemLogger.info('设置每日价格',
+                              f'房间{room_id} {date}: ¥{price_val}')
             return jsonify({'success': True, 'data': new_price})
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 400
 
 
-@app.route('/api/special-prices/<int:price_id>', methods=['DELETE'])
-def api_special_price_delete(price_id):
-    prices = DataManager.read_json(PRICES_FILE, [])
+@app.route('/api/daily-prices/<int:price_id>', methods=['DELETE'])
+def api_daily_price_delete(price_id):
+    prices = DataManager.read_json(DAILY_PRICES_FILE, [])
     item = DataManager.get_by_id(prices, price_id)
     if DataManager.delete_by_id(prices, price_id):
-        DataManager.write_json(PRICES_FILE, prices)
-        SystemLogger.info('删除特殊价格',
+        DataManager.write_json(DAILY_PRICES_FILE, prices)
+        SystemLogger.info('删除每日价格',
                           f'房间{item.get("room_id")} {item.get("date")}')
         return jsonify({'success': True})
     return jsonify({'success': False, 'error': '记录不存在'}), 404
+
+
+# ==================== API：额外收入管理 ====================
+
+@app.route('/api/extra-income', methods=['GET', 'POST'])
+def api_extra_income():
+    if request.method == 'GET':
+        page = int(request.args.get('page', 1))
+        date = request.args.get('date', '')
+        incomes = DataManager.read_json(EXTRA_INCOME_FILE, [])
+        if date:
+            incomes = [e for e in incomes if e.get('date') == date]
+        result = DataManager.query(incomes, sort_key='date', sort_reverse=True,
+                                   page=page, page_size=PAGE_SIZE)
+        return jsonify({'success': True, 'data': result})
+
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
+            incomes = DataManager.read_json(EXTRA_INCOME_FILE, [])
+            new_entry = {
+                'id': DataManager.generate_id(incomes),
+                'date': data.get('date', get_today_str()),
+                'amount': float(data.get('amount', 0)),
+                'description': data.get('description', '').strip(),
+                'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+            incomes.append(new_entry)
+            DataManager.write_json(EXTRA_INCOME_FILE, incomes)
+            SystemLogger.info('新增额外收入',
+                              f'{new_entry["date"]}: ¥{new_entry["amount"]} - {new_entry["description"]}')
+            return jsonify({'success': True, 'data': new_entry})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+
+
+@app.route('/api/extra-income/<int:income_id>', methods=['PUT', 'DELETE'])
+def api_extra_income_detail(income_id):
+    incomes = DataManager.read_json(EXTRA_INCOME_FILE, [])
+
+    if request.method == 'PUT':
+        try:
+            data = request.get_json()
+            updates = {
+                'date': data.get('date', get_today_str()),
+                'amount': float(data.get('amount', 0)),
+                'description': data.get('description', '').strip(),
+            }
+            if DataManager.update_by_id(incomes, income_id, updates):
+                DataManager.write_json(EXTRA_INCOME_FILE, incomes)
+                return jsonify({'success': True})
+            return jsonify({'success': False, 'error': '记录不存在'}), 404
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+
+    elif request.method == 'DELETE':
+        if DataManager.delete_by_id(incomes, income_id):
+            DataManager.write_json(EXTRA_INCOME_FILE, incomes)
+            SystemLogger.info('删除额外收入', f'ID: {income_id}')
+            return jsonify({'success': True})
+        return jsonify({'success': False, 'error': '记录不存在'}), 404
 
 
 # ==================== API：运营日记 ====================

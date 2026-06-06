@@ -91,8 +91,16 @@
                 <span class="badge badge-secondary" id="totalGuests">0</span>
             </div>
             <div class="info-row">
-                <span>本月收入</span>
-                <strong style="color:var(--success);" id="monthIncome">¥0.00</strong>
+                <span>本月房价收入</span>
+                <strong style="color:var(--success);" id="monthPricesSum">¥0.00</strong>
+            </div>
+            <div class="info-row">
+                <span>本月额外收入</span>
+                <strong style="color:var(--info);" id="monthExtra">¥0.00</strong>
+            </div>
+            <div class="info-row">
+                <span>本月总收入</span>
+                <strong style="color:var(--success);font-size:16px;" id="monthIncome">¥0.00</strong>
             </div>
         </div>
     </div>
@@ -142,6 +150,8 @@ async function loadDashboard() {
         document.getElementById('todayCheckouts').textContent = d.today_checkouts;
         document.getElementById('activeBookings').textContent = d.active_bookings;
         document.getElementById('totalGuests').textContent = d.total_guests;
+        document.getElementById('monthPricesSum').textContent = '¥' + (d.month_prices_sum || 0).toFixed(2);
+        document.getElementById('monthExtra').textContent = '¥' + (d.month_extra || 0).toFixed(2);
         document.getElementById('monthIncome').textContent = '¥' + d.month_income.toFixed(2);
 
         // 最近预订

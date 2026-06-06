@@ -46,6 +46,10 @@
                 <span class="nav-icon">📖</span>
                 <span>运营日记</span>
             </a>
+            <a href="{{ url_for('statistics_page') }}" class="nav-item {% if request.path == '/statistics' %}active{% endif %}">
+                <span class="nav-icon">📈</span>
+                <span>统计报表</span>
+            </a>
         </nav>
         <div class="sidebar-footer">
             <span>v1.0 | iStoreOS</span>

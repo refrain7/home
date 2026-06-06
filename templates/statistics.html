@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}统计报表 - 民宿房间管理系统{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>📈 统计报表</h1>
+    <div class="stats-mode-bar">
+        <button class="btn btn-outline active" id="btnYearly" onclick="switchMode('yearly')">📊 按年</button>
+        <button class="btn btn-outline" id="btnMonthly" onclick="switchMode('monthly')">📅 按月</button>
+        <button class="btn btn-outline" id="btnWeekly" onclick="switchMode('weekly')">📆 按周</button>
+    </div>
+</div>
+
+<div class="dashboard-grid">
+    <!-- 收入图表 -->
+    <div class="card">
+        <div class="card-header">
+            <h3>💰 收入趋势</h3>
+        </div>
+        <div class="card-body">
+            <canvas id="incomeChart" height="280"></canvas>
+        </div>
+    </div>
+
+    <!-- 入住率图表 -->
+    <div class="card">
+        <div class="card-header">
+            <h3>📊 入住率趋势</h3>
+        </div>
+        <div class="card-body">
+            <canvas id="occupancyChart" height="280"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- 汇总数据卡片 -->
+<div class="stats-grid" id="summaryGrid">
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+let currentMode = 'monthly';
+let incomeChart = null;
+let occupancyChart = null;
+
+document.addEventListener('DOMContentLoaded', () => loadStatistics());
+
+async function loadStatistics() {
+    const year = new Date().getFullYear();
+    const month = new Date().getMonth() + 1;
+    const res = await fetch(`/api/statistics?mode=${currentMode}&year=${year}&month=${month}`);
+    const json = await res.json();
+    if (!json.success) return;
+
+    const d = json.data;
+    renderIncomeChart(d.labels, d.income);
+    renderOccupancyChart(d.labels, d.occupancy);
+    renderSummary(d);
+}
+
+function renderIncomeChart(labels, data) {
+    const ctx = document.getElementById('incomeChart').getContext('2d');
+    if (incomeChart) incomeChart.destroy();
+
+    const gradient = ctx.createLinearGradient(0, 0, 0, 280);
+    gradient.addColorStop(0, 'rgba(16, 185, 129, 0.3)');
+    gradient.addColorStop(1, 'rgba(16, 185, 129, 0.02)');
+
+    incomeChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '收入 (元)',
+                data: data,
+                backgroundColor: gradient,
+                borderColor: '#10b981',
+                borderWidth: 2,
+                borderRadius: 6,
+                hoverBackgroundColor: 'rgba(16, 185, 129, 0.5)',
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => '¥' + ctx.parsed.y.toFixed(2)
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: v => '¥' + v
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderOccupancyChart(labels, data) {
+    const ctx = document.getElementById('occupancyChart').getContext('2d');
+    if (occupancyChart) occupancyChart.destroy();
+
+    const gradient = ctx.createLinearGradient(0, 0, 0, 280);
+    gradient.addColorStop(0, 'rgba(59, 130, 246, 0.25)');
+    gradient.addColorStop(1, 'rgba(59, 130, 246, 0.02)');
+
+    occupancyChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '入住率 (%)',
+                data: data,
+                borderColor: '#3b82f6',
+                backgroundColor: gradient,
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4,
+                pointBackgroundColor: '#3b82f6',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointRadius: 5,
+                pointHoverRadius: 7,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ctx.parsed.y.toFixed(1) + '%'
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        callback: v => v + '%'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderSummary(d) {
+    const totalIncome = d.income.reduce((a, b) => a + b, 0);
+    const avgOccupancy = d.occupancy.length > 0
+        ? (d.occupancy.reduce((a, b) => a + b, 0) / d.occupancy.length).toFixed(1)
+        : 0;
+    const maxIncome = Math.max(...d.income, 0);
+    const maxIdx = d.income.indexOf(maxIncome);
+
+    document.getElementById('summaryGrid').innerHTML = `
+        <div class="stat-card">
+            <div class="stat-icon" style="background:#d1fae5;color:#059669;">💰</div>
+            <div class="stat-info">
+                <span class="stat-value">¥${totalIncome.toFixed(2)}</span>
+                <span class="stat-label">总收入</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon" style="background:#dbeafe;color:#2563eb;">📊</div>
+            <div class="stat-info">
+                <span class="stat-value">${avgOccupancy}%</span>
+                <span class="stat-label">平均入住率</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon" style="background:#fef3c7;color:#b45309;">🏆</div>
+            <div class="stat-info">
+                <span class="stat-value">¥${maxIncome.toFixed(2)}</span>
+                <span class="stat-label">最高收入${maxIdx >= 0 ? ' (' + d.labels[maxIdx] + ')' : ''}</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon" style="background:#fce7f3;color:#db2777;">📅</div>
+            <div class="stat-info">
+                <span class="stat-value">${d.labels.length}</span>
+                <span class="stat-label">统计周期数</span>
+            </div>
+        </div>`;
+}
+
+function switchMode(mode) {
+    currentMode = mode;
+    document.querySelectorAll('.stats-mode-bar .btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('btn' + mode.charAt(0).toUpperCase() + mode.slice(1)).classList.add('active');
+    loadStatistics();
+}
+</script>
+{% endblock %}

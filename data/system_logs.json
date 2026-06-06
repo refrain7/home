@@ -342,5 +342,557 @@
     "details": "端口: 8080",
     "user": "系统",
     "level": "INFO"
+  },
+  {
+    "id": 44,
+    "timestamp": "2026-06-06 12:53:36",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 45,
+    "timestamp": "2026-06-06 12:53:37",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 46,
+    "timestamp": "2026-06-06 13:00:05",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 47,
+    "timestamp": "2026-06-06 13:00:13",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 48,
+    "timestamp": "2026-06-06 13:00:18",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 49,
+    "timestamp": "2026-06-06 13:00:38",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 50,
+    "timestamp": "2026-06-06 13:00:47",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 51,
+    "timestamp": "2026-06-06 13:00:52",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 52,
+    "timestamp": "2026-06-06 13:01:02",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 53,
+    "timestamp": "2026-06-06 13:01:07",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 54,
+    "timestamp": "2026-06-06 13:01:10",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 55,
+    "timestamp": "2026-06-06 13:01:15",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 56,
+    "timestamp": "2026-06-06 13:01:19",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 57,
+    "timestamp": "2026-06-06 13:17:31",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 58,
+    "timestamp": "2026-06-06 13:17:33",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 59,
+    "timestamp": "2026-06-06 13:18:08",
+    "action": "导入数据",
+    "details": "共导入 6 条记录",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 60,
+    "timestamp": "2026-06-06 13:18:37",
+    "action": "新增预订",
+    "details": "房间: 1, 入住: 2026-06-15, 退房: 2026-06-27",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 61,
+    "timestamp": "2026-06-06 13:18:52",
+    "action": "更新每日价格",
+    "details": "房间1 2026-06-19: ¥100.0",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 62,
+    "timestamp": "2026-06-06 13:19:23",
+    "action": "删除预订",
+    "details": "预订ID: 2",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 63,
+    "timestamp": "2026-06-06 13:19:31",
+    "action": "更新预订",
+    "details": "预订ID: 1, 状态: confirmed -> confirmed",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 64,
+    "timestamp": "2026-06-06 13:19:54",
+    "action": "删除每日价格",
+    "details": "房间1 2026-06-15",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 65,
+    "timestamp": "2026-06-06 13:20:30",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 66,
+    "timestamp": "2026-06-06 13:23:16",
+    "action": "新增预订",
+    "details": "房间: 1, 入住: 2026-06-27, 退房: 2026-06-30",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 67,
+    "timestamp": "2026-06-06 13:24:08",
+    "action": "导入数据",
+    "details": "共导入 29 条记录",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 68,
+    "timestamp": "2026-06-06 13:25:00",
+    "action": "更新预订",
+    "details": "预订ID: 1, 状态: confirmed -> confirmed",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 69,
+    "timestamp": "2026-06-06 13:25:28",
+    "action": "更新预订",
+    "details": "预订ID: 1, 状态: confirmed -> confirmed",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 70,
+    "timestamp": "2026-06-06 13:54:21",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 71,
+    "timestamp": "2026-06-06 13:54:26",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 72,
+    "timestamp": "2026-06-06 13:54:34",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 73,
+    "timestamp": "2026-06-06 13:54:45",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 74,
+    "timestamp": "2026-06-06 13:56:39",
+    "action": "更新预订",
+    "details": "预订ID: 2, 状态: pending -> pending",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 75,
+    "timestamp": "2026-06-06 13:56:43",
+    "action": "更新预订",
+    "details": "预订ID: 1, 状态: confirmed -> confirmed",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 76,
+    "timestamp": "2026-06-06 13:57:44",
+    "action": "清除每日价格",
+    "details": "房间1 2026-06-27~2026-06-30, 共3天",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 77,
+    "timestamp": "2026-06-06 13:57:44",
+    "action": "删除预订",
+    "details": "预订ID: 2",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 78,
+    "timestamp": "2026-06-06 13:57:46",
+    "action": "清除每日价格",
+    "details": "房间1 2026-06-05~2026-06-13, 共8天",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 79,
+    "timestamp": "2026-06-06 13:57:46",
+    "action": "删除预订",
+    "details": "预订ID: 1",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 80,
+    "timestamp": "2026-06-06 13:57:56",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 81,
+    "timestamp": "2026-06-06 14:09:51",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 82,
+    "timestamp": "2026-06-06 14:10:26",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 83,
+    "timestamp": "2026-06-06 14:12:09",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 84,
+    "timestamp": "2026-06-06 14:14:07",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 85,
+    "timestamp": "2026-06-06 14:14:32",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 86,
+    "timestamp": "2026-06-06 14:14:40",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 87,
+    "timestamp": "2026-06-06 14:15:23",
+    "action": "设置每日价格",
+    "details": "房间1 2026-06-14: ¥0.0",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 88,
+    "timestamp": "2026-06-06 14:15:27",
+    "action": "设置每日价格",
+    "details": "房间1 2026-06-15: ¥0.0",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 89,
+    "timestamp": "2026-06-06 14:15:33",
+    "action": "设置每日价格",
+    "details": "房间1 2026-06-02: ¥0.0",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 90,
+    "timestamp": "2026-06-06 14:15:37",
+    "action": "设置每日价格",
+    "details": "房间1 2026-06-04: ¥0.0",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 91,
+    "timestamp": "2026-06-06 14:15:39",
+    "action": "设置每日价格",
+    "details": "房间1 2026-06-05: ¥0.0",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 92,
+    "timestamp": "2026-06-06 14:15:40",
+    "action": "设置每日价格",
+    "details": "房间1 2026-06-06: ¥0.0",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 93,
+    "timestamp": "2026-06-06 14:15:42",
+    "action": "设置每日价格",
+    "details": "房间1 2026-06-07: ¥0.0",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 94,
+    "timestamp": "2026-06-06 14:15:53",
+    "action": "设置每日价格",
+    "details": "房间1 2026-06-08: ¥0.0",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 95,
+    "timestamp": "2026-06-06 14:15:56",
+    "action": "更新每日价格",
+    "details": "房间1 2026-06-04: ¥0.0",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 96,
+    "timestamp": "2026-06-06 14:16:27",
+    "action": "更新每日价格",
+    "details": "房间1 2026-06-08: ¥1.0",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 97,
+    "timestamp": "2026-06-06 14:16:30",
+    "action": "更新每日价格",
+    "details": "房间1 2026-06-07: ¥1.0",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 98,
+    "timestamp": "2026-06-06 14:16:32",
+    "action": "更新每日价格",
+    "details": "房间1 2026-06-06: ¥1.0",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 99,
+    "timestamp": "2026-06-06 14:16:34",
+    "action": "更新每日价格",
+    "details": "房间1 2026-06-05: ¥1.0",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 100,
+    "timestamp": "2026-06-06 14:16:36",
+    "action": "更新每日价格",
+    "details": "房间1 2026-06-04: ¥1.0",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 101,
+    "timestamp": "2026-06-06 14:16:38",
+    "action": "更新每日价格",
+    "details": "房间1 2026-06-02: ¥1.0",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 102,
+    "timestamp": "2026-06-06 14:16:54",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 103,
+    "timestamp": "2026-06-06 14:18:33",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 104,
+    "timestamp": "2026-06-06 14:19:07",
+    "action": "清除每日价格",
+    "details": "房间1 2026-06-02",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 105,
+    "timestamp": "2026-06-06 14:19:35",
+    "action": "上传图片",
+    "details": "目录: diary, 文件: img_20260606141934_45ac4defbfe8.png",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 106,
+    "timestamp": "2026-06-06 14:19:37",
+    "action": "新增日记",
+    "details": "日期: 2026-06-06, 标题: test",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 107,
+    "timestamp": "2026-06-06 14:19:56",
+    "action": "删除每日价格",
+    "details": "房间1 2026-06-05",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 108,
+    "timestamp": "2026-06-06 14:20:01",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 109,
+    "timestamp": "2026-06-06 14:20:13",
+    "action": "删除每日价格",
+    "details": "房间1 2026-06-18",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 110,
+    "timestamp": "2026-06-06 14:20:15",
+    "action": "删除每日价格",
+    "details": "房间1 2026-06-20",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 111,
+    "timestamp": "2026-06-06 14:20:19",
+    "action": "删除每日价格",
+    "details": "房间1 2026-06-22",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 112,
+    "timestamp": "2026-06-06 14:20:45",
+    "action": "导入数据",
+    "details": "共导入 20 条记录",
+    "user": "系统",
+    "level": "INFO"
   }
 ]
