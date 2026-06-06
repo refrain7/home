@@ -69,6 +69,7 @@
                 <span class="current-time" id="currentTime"></span>
                 <button class="btn btn-sm btn-outline" onclick="exportData()" title="导出数据">📤 导出</button>
                 <button class="btn btn-sm btn-outline" onclick="document.getElementById('importFile').click()" title="导入数据">📥 导入</button>
+                <button class="btn btn-sm btn-danger" onclick="clearAllData()" title="清除所有数据">🗑️ 清空</button>
                 <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)">
             </div>
         </header>

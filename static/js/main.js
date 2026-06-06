@@ -283,6 +283,26 @@ async function importData(input) {
     input.value = '';
 }
 
+// ==================== 清除所有数据 ====================
+
+async function clearAllData() {
+    if (!confirm('⚠️ 确定要清除所有数据吗？\n\n这将删除：房型、房间、客人、预订、每日价格、额外收入、日记、系统日志。\n\n此操作不可恢复！建议先导出备份。')) return;
+    if (!confirm('再次确认：真的要清除全部数据吗？')) return;
+
+    try {
+        const res = await fetch('/api/clear-all-data', { method: 'POST' });
+        const json = await res.json();
+        if (json.success) {
+            showToast('所有数据已清除', 'success');
+            setTimeout(() => location.reload(), 800);
+        } else {
+            showToast(json.error || '清除失败', 'error');
+        }
+    } catch (e) {
+        showToast('清除失败: ' + e.message, 'error');
+    }
+}
+
 // ==================== 侧边栏切换（移动端） ====================
 
 document.addEventListener('DOMContentLoaded', () => {

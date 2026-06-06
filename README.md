@@ -6,16 +6,18 @@
 
 | 功能 | 说明 |
 |------|------|
-| 📊 **仪表盘** | 实时统计概览：房间状态、入住率、收入统计 |
+| 📊 **仪表盘** | 实时统计概览：房间状态、入住率、收入、高考倒计时、名言滚动 |
 | 🏠 **房型管理** | 管理房型名称、价格（基础/周末/节假日）、设施、图片 |
 | 🚪 **房间管理** | 管理每个房间的编号、楼层、状态、所属房型 |
 | 👤 **客人管理** | 客人信息登记：姓名、手机、身份证、国籍等 |
-| 📋 **预订管理** | 完整的预订流程：预订→确认→入住→退房 |
-| 📅 **日历视图** | 可视化查看各房间预订状态 |
+| 📋 **预订管理** | 完整预订流程：预订→确认→入住→退房，每日价格联动日历 |
+| 📅 **日历视图** | 可视化房间预订状态，点击格子直接修改每日价格，支持导出 Excel |
+| 📈 **统计报表** | 收入/入住率按年/月/周可视化图表（Chart.js） |
+| 📖 **运营日记** | 记录日常运营，支持天气、心情、图片 |
 | 🔍 **全局搜索** | 快速搜索客人、房间、预订 |
 | 📝 **系统日志** | 完整操作日志记录，支持查看和清空 |
-| 🖼️ **图片上传** | 支持房型图片上传，自动生成缩略图 |
-| 📤 **数据导出/导入** | JSON 格式备份，方便数据迁移 |
+| 🖼️ **图片上传** | 支持房型/日记图片上传，自动生成缩略图 |
+| 📤 **数据导出/导入** | JSON 格式一键备份恢复，日历可导出 Excel |
 | 📱 **响应式设计** | 适配桌面端和移动端 |
 
 ## 📁 项目结构
@@ -32,7 +34,11 @@ home/
 │   ├── rooms.json
 │   ├── guests.json
 │   ├── bookings.json
-│   └── system_logs.json
+│   ├── daily_prices.json   # 每日价格
+│   ├── extra_income.json   # 额外收入
+│   ├── diary.json          # 运营日记
+│   ├── system_logs.json
+│   └── quotes.txt          # 名言库
 ├── logs/                   # 文本日志文件
 │   └── system.log
 ├── static/
@@ -41,12 +47,14 @@ home/
 │   └── uploads/            # 上传的图片
 ├── templates/              # HTML 模板
 │   ├── base.html           # 基础布局
-│   ├── index.html          # 仪表盘
+│   ├── index.html          # 仪表盘（含高考倒计时、名言滚动）
 │   ├── room_types.html     # 房型管理
 │   ├── rooms.html          # 房间管理
 │   ├── guests.html         # 客人管理
-│   ├── bookings.html       # 预订管理
-│   ├── calendar.html       # 日历视图
+│   ├── bookings.html       # 预订管理（含快速新增客人）
+│   ├── calendar.html       # 日历视图（点击定价、导出Excel）
+│   ├── statistics.html     # 统计报表（Chart.js图表）
+│   ├── diary.html          # 运营日记
 │   └── logs.html           # 系统日志
 └── utils/
     ├── data_manager.py     # JSON 数据管理器
@@ -64,7 +72,7 @@ home/
 ### 安装依赖
 
 ```bash
-pip install Flask Pillow
+pip install Flask Pillow openpyxl
 ```
 
 ### 启动服务
@@ -96,7 +104,7 @@ python app.py
    ```
 3. 安装依赖：
    ```bash
-   pip3 install Flask Pillow
+   pip3 install Flask Pillow openpyxl
    ```
 4. 创建开机自启服务（可选）：
 
@@ -131,7 +139,11 @@ python app.py
 - `rooms.json` — 房间数据
 - `guests.json` — 客人数据
 - `bookings.json` — 预订数据
+- `daily_prices.json` — 每日价格（日历定价）
+- `extra_income.json` — 额外收入
+- `diary.json` — 运营日记
 - `system_logs.json` — 操作日志
+- `quotes.txt` — 仪表盘名言库
 
 **数据迁移**：直接复制 `data/` 目录即可完成数据迁移。也可通过网页的「导出/导入」功能进行备份与恢复。
 

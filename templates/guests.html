@@ -38,13 +38,26 @@
         <div class="pagination" id="guestPagination"></div>
     </div>
 </div>
+
+<!-- 预订来源管理 -->
+<div class="card">
+    <div class="card-header">
+        <h3>🏷️ 预订来源管理</h3>
+        <button class="btn btn-primary btn-sm" onclick="showSourceForm()">+ 新增来源</button>
+    </div>
+    <div class="card-body">
+        <div id="sourcesList">
+            <p class="text-muted text-center">加载中...</p>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 let currentPage = 1;
 
-document.addEventListener('DOMContentLoaded', () => loadGuests());
+document.addEventListener('DOMContentLoaded', () => { loadGuests(); loadSources(); });
 
 async function loadGuests() {
     const keyword = document.getElementById('searchKeyword').value;
@@ -212,6 +225,77 @@ async function deleteGuest(id, name) {
     const res = await fetch(`/api/guests/${id}`, { method: 'DELETE' });
     const json = await res.json();
     if (json.success) { loadGuests(); showToast('客人已删除', 'success'); }
+    else { showToast(json.error || '删除失败', 'error'); }
+}
+
+// ==================== 预订来源管理 ====================
+
+async function loadSources() {
+    const res = await fetch('/api/booking-sources');
+    const json = await res.json();
+    if (!json.success) return;
+    let html = '';
+    json.data.forEach(s => {
+        html += `<div class="source-item" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100);">
+            <span style="display:flex;align-items:center;gap:8px;">
+                <span style="width:16px;height:16px;border-radius:50%;background:${s.color};display:inline-block;"></span>
+                <strong>${escHtml(s.name)}</strong>
+                <code style="font-size:11px;color:var(--gray-400);">${s.color}</code>
+            </span>
+            <span>
+                <button class="btn btn-sm btn-outline" onclick="editSource(${s.id}, '${escHtml(s.name)}', '${s.color}')">编辑</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteSource(${s.id}, '${escHtml(s.name)}')">删除</button>
+            </span>
+        </div>`;
+    });
+    document.getElementById('sourcesList').innerHTML = html || '<p class="text-muted text-center">暂无来源</p>';
+}
+
+function showSourceForm(data = null) {
+    const isEdit = data !== null;
+    document.getElementById('modalTitle').textContent = isEdit ? '编辑预订来源' : '新增预订来源';
+    document.getElementById('modalBody').innerHTML = `
+        <form id="sourceForm">
+            <input type="hidden" id="sourceId" value="${data ? data.id : ''}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>来源名称 <span class="required">*</span></label>
+                    <input type="text" id="sourceName" class="form-control" value="${data ? escHtml(data.name) : ''}" required>
+                </div>
+                <div class="form-group">
+                    <label>颜色</label>
+                    <input type="color" id="sourceColor" class="form-control" value="${data ? data.color : '#6b7280'}" style="height:40px;width:60px;padding:2px;">
+                </div>
+            </div>
+        </form>`;
+    document.getElementById('modalFooter').innerHTML = `
+        <button class="btn btn-outline" onclick="closeModal()">取消</button>
+        <button class="btn btn-primary" onclick="saveSource()">${isEdit ? '保存' : '新增'}</button>`;
+    openModal();
+}
+
+async function saveSource() {
+    const id = document.getElementById('sourceId').value;
+    const name = document.getElementById('sourceName').value.trim();
+    if (!name) { showToast('请输入来源名称', 'error'); return; }
+    const data = { name, color: document.getElementById('sourceColor').value };
+    const url = id ? `/api/booking-sources/${id}` : '/api/booking-sources';
+    const method = id ? 'PUT' : 'POST';
+    const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+    const json = await res.json();
+    if (json.success) { closeModal(); loadSources(); showToast(id ? '来源已更新' : '来源已新增', 'success'); }
+    else { showToast(json.error || '操作失败', 'error'); }
+}
+
+function editSource(id, name, color) {
+    showSourceForm({ id, name, color });
+}
+
+async function deleteSource(id, name) {
+    if (!confirm(`确定要删除来源 "${name}" 吗？`)) return;
+    const res = await fetch(`/api/booking-sources/${id}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (json.success) { loadSources(); showToast('来源已删除', 'success'); }
     else { showToast(json.error || '删除失败', 'error'); }
 }
 </script>

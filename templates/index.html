@@ -7,6 +7,11 @@
     <p class="text-muted">民宿运营数据概览</p>
 </div>
 
+<!-- 滚动名言栏 -->
+<div class="quotes-ticker" id="quotesTicker">
+    <div class="quotes-track" id="quotesTrack">🌟 加载中...</div>
+</div>
+
 <!-- 统计卡片 -->
 <div class="stats-grid" id="statsGrid">
     <div class="stat-card">
@@ -63,6 +68,13 @@
         <div class="stat-info">
             <span class="stat-value" id="statMaintenance">-</span>
             <span class="stat-label">维修中</span>
+        </div>
+    </div>
+    <div class="stat-card" style="background:linear-gradient(135deg,#fef2f2,#fefce8);border:2px solid #fbbf24;">
+        <div class="stat-icon" style="background:#fef3c7;color:#d97706;font-size:28px;">🎓</div>
+        <div class="stat-info">
+            <span class="stat-value" id="statCountdown" style="font-size:28px;">-</span>
+            <span class="stat-label">距2027高考还有</span>
         </div>
     </div>
 </div>
@@ -153,6 +165,14 @@ async function loadDashboard() {
         document.getElementById('monthPricesSum').textContent = '¥' + (d.month_prices_sum || 0).toFixed(2);
         document.getElementById('monthExtra').textContent = '¥' + (d.month_extra || 0).toFixed(2);
         document.getElementById('monthIncome').textContent = '¥' + d.month_income.toFixed(2);
+
+        // 高考倒计时
+        document.getElementById('statCountdown').textContent = (d.countdown_days || 0) + ' 天';
+
+        // 滚动名言
+        if (d.quotes && d.quotes.length > 0) {
+            document.getElementById('quotesTrack').innerHTML = d.quotes.map(q => '🌟 ' + escHtml(q)).join(' &nbsp;│&nbsp; ');
+        }
 
         // 最近预订
         let bookingsHtml = '';

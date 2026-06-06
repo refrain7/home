@@ -27,6 +27,8 @@ LOGS_FILE = os.path.join(DATA_DIR, 'system_logs.json')
 DAILY_PRICES_FILE = os.path.join(DATA_DIR, 'daily_prices.json')
 EXTRA_INCOME_FILE = os.path.join(DATA_DIR, 'extra_income.json')
 DIARY_FILE = os.path.join(DATA_DIR, 'diary.json')
+QUOTES_FILE = os.path.join(DATA_DIR, 'quotes.txt')
+BOOKING_SOURCES_FILE = os.path.join(DATA_DIR, 'booking_sources.json')
 
 # Flask 配置
 SECRET_KEY = 'homestay-manager-secret-key-2024'

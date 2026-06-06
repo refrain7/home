@@ -9,6 +9,7 @@
         <h2 id="calendarTitle"></h2>
         <button class="btn btn-outline" onclick="nextMonth()">下月 ▶</button>
         <button class="btn btn-outline" onclick="goToday()">今天</button>
+        <button class="btn btn-outline" onclick="exportExcel()" title="导出当前月为Excel">📥 导出Excel</button>
     </div>
 </div>
 
@@ -24,12 +25,8 @@
 <div class="card" style="margin-top:16px;">
     <div class="card-header"><h3>图例</h3></div>
     <div class="card-body">
-        <div class="legend">
-            <span class="legend-item"><span class="legend-color" style="background:#f59e0b;"></span> 待确认</span>
-            <span class="legend-item"><span class="legend-color" style="background:#3b82f6;"></span> 已确认</span>
-            <span class="legend-item"><span class="legend-color" style="background:#10b981;"></span> 已入住</span>
-            <span class="legend-item"><span class="legend-color" style="background:#6b7280;"></span> 已退房</span>
-            <span class="legend-item"><span class="legend-color" style="background:#ec4899;width:14px;height:4px;border-radius:2px;display:inline-block;"></span> 每日定价</span>
+        <div class="legend" id="calendarLegend">
+            <span class="legend-item"><span class="legend-color" style="background:#fdf2f8;border:1px solid #f9a8d4;"></span> 每日定价</span>
         </div>
     </div>
 </div>
@@ -58,6 +55,14 @@ async function loadCalendar() {
     eventsData = json.data.events;
     roomsData = json.data.rooms;
     pricesData = json.data.prices || {};
+    // 渲染来源图例
+    if (json.data.sources) {
+        let legend = '';
+        json.data.sources.forEach(s => {
+            legend += `<span class="legend-item"><span class="legend-color" style="background:${s.color};"></span> ${escHtml(s.name)}</span>`;
+        });
+        document.getElementById('calendarLegend').innerHTML = legend + '<span class="legend-item"><span class="legend-color" style="background:#fdf2f8;border:1px solid #f9a8d4;"></span> 每日定价</span>';
+    }
     renderCalendar();
 }
 
@@ -220,6 +225,11 @@ function goToday() {
     currentYear = now.getFullYear();
     currentMonth = now.getMonth() + 1;
     loadCalendar();
+}
+
+function exportExcel() {
+    const url = `/api/calendar/export-excel?year=${currentYear}&month=${currentMonth}`;
+    window.open(url, '_blank');
 }
 </script>
 {% endblock %}

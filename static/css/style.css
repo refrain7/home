@@ -241,8 +241,7 @@ a:hover { text-decoration: underline; }
 /* 页面内容 */
 .page-content {
     flex: 1;
-    padding: 24px;
-    max-width: 1400px;
+    padding: 24px 32px;
     width: 100%;
 }
 
@@ -1039,6 +1038,8 @@ textarea.form-control {
 .mb-4 { margin-bottom: 16px; }
 
 /* ==================== 响应式 ==================== */
+
+/* 平板及以下 */
 @media (max-width: 768px) {
     .sidebar {
         transform: translateX(-100%);
@@ -1046,6 +1047,7 @@ textarea.form-control {
 
     .sidebar.open {
         transform: translateX(0);
+        box-shadow: 4px 0 20px rgba(0,0,0,0.3);
     }
 
     .main-content {
@@ -1057,11 +1059,35 @@ textarea.form-control {
     }
 
     .page-content {
-        padding: 16px;
+        padding: 12px;
+    }
+
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .page-header h1 {
+        font-size: 18px;
     }
 
     .stats-grid {
         grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    .stat-card {
+        padding: 14px;
+    }
+
+    .stat-value {
+        font-size: 20px;
+    }
+
+    .stat-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
     }
 
     .room-grid {
@@ -1071,7 +1097,7 @@ textarea.form-control {
     .topbar {
         flex-wrap: wrap;
         height: auto;
-        padding: 10px 12px;
+        padding: 8px 12px;
     }
 
     .search-box {
@@ -1083,20 +1109,165 @@ textarea.form-control {
     .detail-grid {
         grid-template-columns: 1fr;
     }
+
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* 表格横向滚动 */
+    .table-container {
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .table th,
+    .table td {
+        padding: 8px 6px;
+        font-size: 12px;
+    }
+
+    .action-cell {
+        flex-wrap: wrap;
+    }
+
+    .btn {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+
+    .btn-sm {
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+
+    .form-row {
+        flex-direction: column;
+        gap: 0;
+    }
+
+    .filter-bar {
+        flex-direction: column;
+    }
+
+    .filter-bar input,
+    .filter-bar select {
+        width: 100%;
+    }
+
+    /* 模态框占满 */
+    .modal {
+        width: 100%;
+        max-width: 100%;
+        height: 100%;
+        max-height: 100%;
+        border-radius: 0;
+    }
+
+    .modal-body {
+        padding: 16px;
+    }
+
+    .calendar-nav {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .calendar-nav h2 {
+        font-size: 14px;
+        min-width: auto;
+    }
+
+    .stats-mode-bar {
+        width: 100%;
+    }
+
+    .stats-mode-bar .btn {
+        flex: 1;
+    }
 }
 
+/* 手机 */
 @media (max-width: 480px) {
     .stats-grid {
         grid-template-columns: 1fr 1fr;
-        gap: 8px;
+        gap: 6px;
     }
 
     .stat-card {
-        padding: 12px;
+        padding: 10px;
+        gap: 8px;
     }
 
     .stat-value {
-        font-size: 18px;
+        font-size: 16px;
+    }
+
+    .stat-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 15px;
+        border-radius: 8px;
+    }
+
+    .stat-label {
+        font-size: 11px;
+    }
+
+    .page-content {
+        padding: 8px;
+    }
+
+    .card-body {
+        padding: 12px;
+    }
+
+    .card-header {
+        padding: 12px;
+    }
+
+    .topbar {
+        gap: 6px;
+    }
+
+    .topbar-actions {
+        gap: 4px;
+    }
+
+    .topbar-actions .btn {
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+
+    .current-time {
+        display: none;
+    }
+
+    .info-row {
+        font-size: 12px;
+        padding: 6px 0;
+    }
+
+    .diary-card {
+        padding: 12px;
+    }
+
+    .diary-img {
+        width: 80px;
+        height: 80px;
+    }
+
+    .log-entry {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+
+    .log-details {
+        max-width: 100%;
+        margin-left: 0;
+    }
+
+    .quotes-track {
+        font-size: 11px;
     }
 }
 
@@ -1113,15 +1284,14 @@ textarea.form-control {
 }
 
 .has-daily-price {
-    border-bottom: 3px solid #ec4899 !important;
+    background: #fdf2f8 !important;
 }
 
 .price-dot {
-    font-size: 9px;
-    color: #ec4899;
+    font-size: 11px;
+    color: #db2777;
     font-weight: 700;
-    background: #fce7f3;
-    padding: 0 3px;
+    padding: 1px 4px;
     border-radius: 3px;
     margin-top: 1px;
     display: inline-block;
@@ -1215,4 +1385,29 @@ textarea.form-control {
     background: var(--primary);
     color: #fff;
     border-color: var(--primary);
+}
+
+/* ==================== 滚动名言栏 ==================== */
+
+.quotes-ticker {
+    background: linear-gradient(135deg, #fefce8, #fef3c7);
+    border: 1px solid #fde68a;
+    border-radius: var(--radius);
+    padding: 10px 16px;
+    margin-bottom: 16px;
+    overflow: hidden;
+    position: relative;
+}
+
+.quotes-track {
+    white-space: nowrap;
+    display: inline-block;
+    animation: scrollQuotes 40s linear infinite;
+    font-size: 13px;
+    color: #92400e;
+}
+
+@keyframes scrollQuotes {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
 }

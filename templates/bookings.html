@@ -58,6 +58,7 @@
 let currentPage = 1;
 let guestsList = [];
 let roomsList = [];
+let sourcesList = [];
 
 function autoCalcTotal() {
     const dailyPrice = parseFloat(document.getElementById('bookingDailyPrice').value) || 0;
@@ -102,6 +103,7 @@ async function loadBookings() {
     if (!json.success) return;
 
     const data = json.data;
+    if (json.sources) sourcesList = json.sources;
     const statusClass = {pending:'badge-warning', confirmed:'badge-info', checked_in:'badge-success', checked_out:'badge-secondary', cancelled:'badge-danger', no_show:'badge-dark'};
     let html = '';
     if (data.items.length === 0) {
@@ -119,7 +121,7 @@ async function loadBookings() {
                     <td><strong>¥${b.total_price.toFixed(2)}</strong></td>
                     <td>¥${b.deposit.toFixed(2)}</td>
                     <td><span class="badge ${statusClass[b.status] || ''}">${b.status}</span></td>
-                    <td>${escHtml(b.source || '-')}</td>
+                    <td><span class="badge" style="background:${b.source_color || '#6b7280'};color:#fff;">${escHtml(b.source || '-')}</span></td>
                     <td><small>${b.created_at}</small></td>
                     <td class="action-cell">
                         <button class="btn btn-sm btn-outline" onclick="editBooking(${b.id})">编辑</button>
@@ -203,7 +205,9 @@ function showBookingForm(data = null) {
                 </div>
                 <div class="form-group">
                     <label>预订来源</label>
-                    <input type="text" id="bookingSource" class="form-control" value="${data ? escHtml(data.source || '') : '直接预订'}" placeholder="如: 携程, 美团, 直接预订">
+                    <select id="bookingSource" class="form-control">
+                        ${sourcesList.map(s => `<option value="${escHtml(s.name)}" ${data && data.source === s.name ? 'selected' : (!data && s.name === '直接预订' ? 'selected' : '')}>${escHtml(s.name)}</option>`).join('')}
+                    </select>
                 </div>
             </div>
             <div class="form-group">

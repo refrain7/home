@@ -7,10 +7,11 @@
 
 import os
 import sys
+import io
 from datetime import datetime, timedelta
 
 from flask import (Flask, render_template, request, jsonify,
-                   redirect, url_for, send_from_directory)
+                   redirect, url_for, send_from_directory, send_file)
 
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -37,6 +38,19 @@ def parse_date(date_str):
         return datetime.strptime(date_str, '%Y-%m-%d')
     except (ValueError, TypeError):
         return None
+
+
+def _get_random_quotes(n=3):
+    """从名言文件中随机读取 n 条"""
+    try:
+        if os.path.exists(QUOTES_FILE):
+            with open(QUOTES_FILE, 'r', encoding='utf-8') as f:
+                lines = [line.strip() for line in f if line.strip()]
+            import random
+            return random.sample(lines, min(n, len(lines)))
+    except Exception:
+        pass
+    return ['用心服务每一位客人 🌟']
 
 
 # ==================== 路由：页面 ====================
@@ -163,6 +177,13 @@ def api_dashboard():
         # 最近日志
         logs_data = SystemLogger.get_logs(page=1, page_size=10)
 
+        # 高考倒计时
+        gaokao_date = datetime(2027, 6, 7)
+        countdown_days = (gaokao_date - datetime.now()).days
+
+        # 每日名言（随机3条）
+        quotes = _get_random_quotes(3)
+
         return jsonify({
             'success': True,
             'data': {
@@ -182,7 +203,9 @@ def api_dashboard():
                 'month_extra': round(month_extra, 2),
                 'occupancy_rate': occupancy_rate,
                 'recent_bookings': recent_bookings,
-                'recent_logs': logs_data['items']
+                'recent_logs': logs_data['items'],
+                'countdown_days': countdown_days,
+                'quotes': quotes
             }
         })
     except Exception as e:
@@ -567,17 +590,22 @@ def api_bookings():
         # 关联客人和房间信息
         guest_map = {g['id']: g for g in guests}
         room_map = {r['id']: r for r in rooms}
+        sources = DataManager.read_json(BOOKING_SOURCES_FILE, [])
+        source_map = {s['name']: s for s in sources}
         for item in result['items']:
             g = guest_map.get(item.get('guest_id'), {})
             item['guest_name'] = g.get('name', '未知')
             item['guest_phone'] = g.get('phone', '')
             r = room_map.get(item.get('room_id'), {})
             item['room_number'] = r.get('room_number', '未知')
+            src = source_map.get(item.get('source', ''), {})
+            item['source_color'] = src.get('color', '#6b7280')
 
         return jsonify({
             'success': True,
             'data': result,
-            'status_options': BOOKING_STATUS
+            'status_options': BOOKING_STATUS,
+            'sources': sources
         })
 
     elif request.method == 'POST':
@@ -906,6 +934,10 @@ def api_calendar_data():
 
     guest_map = {g['id']: g for g in guests}
 
+    # 预订来源颜色
+    sources = DataManager.read_json(BOOKING_SOURCES_FILE, [])
+    source_colors = {s['name']: s['color'] for s in sources}
+
     # 筛选该月的预订
     month_start = f'{year}-{month:02d}-01'
     if month == 12:
@@ -923,14 +955,16 @@ def api_calendar_data():
     events = []
     for b in month_bookings:
         guest = guest_map.get(b.get('guest_id'), {})
+        src = b.get('source', '')
         events.append({
             'id': b['id'],
             'room_id': b['room_id'],
             'title': f"{guest.get('name', '未知')}",
+            'source': src,
             'start': b['check_in_date'],
             'end': b['check_out_date'],
             'status': b['status'],
-            'color': _get_status_color(b['status'])
+            'color': source_colors.get(src, '#6b7280')
         })
 
     # 筛选该月的每日价格
@@ -948,9 +982,109 @@ def api_calendar_data():
             'month': month,
             'rooms': rooms,
             'events': events,
-            'prices': month_prices
+            'prices': month_prices,
+            'sources': sources
         }
     })
+
+
+@app.route('/api/calendar/export-excel')
+def api_calendar_export_excel():
+    """导出日历为 Excel"""
+    year = int(request.args.get('year', datetime.now().year))
+    month = int(request.args.get('month', datetime.now().month))
+
+    rooms = DataManager.read_json(ROOMS_FILE, [])
+    prices = DataManager.read_json(DAILY_PRICES_FILE, [])
+    bookings = DataManager.read_json(BOOKINGS_FILE, [])
+    guests = DataManager.read_json(GUESTS_FILE, [])
+    guest_map = {g['id']: g.get('name', '') for g in guests}
+
+    # 价格索引
+    price_map = {}
+    for p in prices:
+        price_map[(p.get('room_id'), p.get('date'))] = p.get('price', 0)
+
+    # 当月天数
+    days_in_month = [31, 28 + (1 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 0),
+                    31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1]
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f'{year}年{month}月'
+
+    # 标题行
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=days_in_month + 2)
+    ws.cell(1, 1, f'{year}年{month}月 - 民宿房间日历').font = Font(size=14, bold=True)
+    ws.cell(1, 1).alignment = Alignment(horizontal='center')
+
+    # 表头
+    headers = ['房间号', '房型']
+    for d in range(1, days_in_month + 1):
+        headers.append(f'{month}/{d}')
+    headers.append('月合计')
+    for i, h in enumerate(headers, 1):
+        cell = ws.cell(3, i, h)
+        cell.font = Font(bold=True, size=10)
+        cell.fill = PatternFill('solid', fgColor='E5E7EB')
+        cell.alignment = Alignment(horizontal='center')
+
+    # 数据行
+    for ri, room in enumerate(rooms):
+        row = ri + 4
+        ws.cell(row, 1, room.get('room_number', ''))
+        type_map = {t['id']: t['name'] for t in DataManager.read_json(ROOM_TYPES_FILE, [])}
+        ws.cell(row, 2, type_map.get(room.get('room_type_id'), ''))
+
+        month_total = 0
+        for d in range(1, days_in_month + 1):
+            date_str = f'{year}-{month:02d}-{d:02d}'
+            price = price_map.get((room.get('id'), date_str), 0)
+            if price > 0:
+                ws.cell(row, d + 2, price)
+                month_total += price
+            # 预订人标注（用备注）
+            day_bookings = [b for b in bookings
+                          if b.get('room_id') == room.get('id') and
+                          b.get('check_in_date', '') <= date_str and
+                          b.get('check_out_date', '') > date_str and
+                          b.get('status') not in ('cancelled', 'no_show')]
+            if day_bookings:
+                guest_name = guest_map.get(day_bookings[0].get('guest_id'), '')
+                cell = ws.cell(row, d + 2)
+                if guest_name:
+                    cell.comment = None  # openpyxl comment can be complex, skip for now
+
+        ws.cell(row, days_in_month + 3, round(month_total, 2))
+        ws.cell(row, days_in_month + 3).font = Font(bold=True)
+
+    # 合计行
+    total_row = len(rooms) + 4
+    ws.cell(total_row, 1, '日合计').font = Font(bold=True)
+    for d in range(1, days_in_month + 1):
+        col_total = 0
+        for ri in range(len(rooms)):
+            date_str = f'{year}-{month:02d}-{d:02d}'
+            price = price_map.get((rooms[ri].get('id'), date_str), 0)
+            col_total += price
+        cell = ws.cell(total_row, d + 2, round(col_total, 2))
+        cell.font = Font(bold=True)
+
+    # 调整列宽
+    ws.column_dimensions['A'].width = 10
+    ws.column_dimensions['B'].width = 14
+    for d in range(1, days_in_month + 1):
+        ws.column_dimensions[ws.cell(3, d + 2).column_letter].width = 8
+
+    # 保存到内存
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     as_attachment=True, download_name=f'calendar_{year}_{month:02d}.xlsx')
 
 
 def _get_status_color(status):
@@ -1236,6 +1370,54 @@ def api_daily_price_delete(price_id):
     return jsonify({'success': False, 'error': '记录不存在'}), 404
 
 
+# ==================== API：预订来源管理 ====================
+
+@app.route('/api/booking-sources', methods=['GET', 'POST'])
+def api_booking_sources():
+    if request.method == 'GET':
+        sources = DataManager.read_json(BOOKING_SOURCES_FILE, [])
+        return jsonify({'success': True, 'data': sources})
+
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
+            sources = DataManager.read_json(BOOKING_SOURCES_FILE, [])
+            new_src = {
+                'id': DataManager.generate_id(sources),
+                'name': data.get('name', '').strip(),
+                'color': data.get('color', '#6b7280'),
+            }
+            sources.append(new_src)
+            DataManager.write_json(BOOKING_SOURCES_FILE, sources)
+            SystemLogger.info('新增预订来源', f'{new_src["name"]}')
+            return jsonify({'success': True, 'data': new_src})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+
+
+@app.route('/api/booking-sources/<int:src_id>', methods=['PUT', 'DELETE'])
+def api_booking_source_detail(src_id):
+    sources = DataManager.read_json(BOOKING_SOURCES_FILE, [])
+    if request.method == 'PUT':
+        try:
+            data = request.get_json()
+            updates = {
+                'name': data.get('name', '').strip(),
+                'color': data.get('color', '#6b7280'),
+            }
+            if DataManager.update_by_id(sources, src_id, updates):
+                DataManager.write_json(BOOKING_SOURCES_FILE, sources)
+                return jsonify({'success': True})
+            return jsonify({'success': False, 'error': '不存在'}), 404
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+    elif request.method == 'DELETE':
+        if DataManager.delete_by_id(sources, src_id):
+            DataManager.write_json(BOOKING_SOURCES_FILE, sources)
+            return jsonify({'success': True})
+        return jsonify({'success': False, 'error': '不存在'}), 404
+
+
 # ==================== API：额外收入管理 ====================
 
 @app.route('/api/extra-income', methods=['GET', 'POST'])
@@ -1401,6 +1583,21 @@ def api_batch_room_status():
         return jsonify({'success': True, 'message': f'成功更新 {count} 个房间'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
+
+
+# ==================== API：清除所有数据 ====================
+
+@app.route('/api/clear-all-data', methods=['POST'])
+def api_clear_all_data():
+    """清除所有业务数据"""
+    try:
+        for f in [ROOM_TYPES_FILE, ROOMS_FILE, GUESTS_FILE, BOOKINGS_FILE,
+                  DAILY_PRICES_FILE, EXTRA_INCOME_FILE, DIARY_FILE, LOGS_FILE]:
+            DataManager.write_json(f, [])
+        SystemLogger.info('清除所有数据', '所有业务数据已清空')
+        return jsonify({'success': True, 'message': '所有数据已清除'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # ==================== 错误处理 ====================
