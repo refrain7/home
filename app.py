@@ -111,6 +111,12 @@ def statistics_page():
     return render_template('statistics.html')
 
 
+@app.route('/booking-sources')
+def booking_sources_page():
+    """预订来源管理页面"""
+    return render_template('booking_sources.html')
+
+
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
     """访问上传的文件"""
@@ -570,7 +576,8 @@ def api_bookings():
             bookings = [
                 b for b in bookings
                 if b.get('guest_id') in matched_guest_ids or
-                   b.get('room_id') in matched_room_ids
+                   b.get('room_id') in matched_room_ids or
+                   keyword.lower() in str(b.get('id', ''))
             ]
 
         if status:

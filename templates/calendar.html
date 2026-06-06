@@ -98,6 +98,7 @@ function renderCalendar() {
         for (let d = 1; d <= daysInMonth; d++) {
             const dateStr = `${currentYear}-${String(currentMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
             const dayEvents = events.filter(e => e.start <= dateStr && e.end > dateStr);
+            const dayBooking = dayEvents.length > 0 ? dayEvents[0] : null;
 
             // 查找特殊价格
             const priceKey = `${room.id}_${dateStr}`;
@@ -115,7 +116,7 @@ function renderCalendar() {
             }
 
             html += `<td class="day-cell ${cellClass}" title="${cellTitle}" 
-                         onclick="openPriceModal(${room.id}, '${dateStr}', '${escHtml(room.room_number)}', ${specialPrice && specialPrice.price > 0 ? specialPrice.price : 'null'}, ${specialPrice ? specialPrice.id : 'null'}, '${specialPrice ? escHtml(specialPrice.note || '') : ''}')">`;
+                         onclick="openPriceModal(${room.id}, '${dateStr}', '${escHtml(room.room_number)}', ${specialPrice && specialPrice.price > 0 ? specialPrice.price : 'null'}, ${specialPrice ? specialPrice.id : 'null'}, '${specialPrice ? escHtml(specialPrice.note || '') : ''}', ${dayBooking ? dayBooking.id : 'null'}, '${dayBooking ? escHtml(dayBooking.title) : ''}', '${dayBooking ? escHtml(dayBooking.source || '') : ''}')">`;
             dayEvents.forEach(e => {
                 const isStart = e.start === dateStr;
                 html += `<div class="booking-bar" style="background:${e.color};" title="${escHtml(e.title)}">
@@ -136,12 +137,17 @@ function renderCalendar() {
 
 // ==================== 每日价格弹窗 ====================
 
-function openPriceModal(roomId, dateStr, roomNumber, currentPrice, priceId, note) {
+function openPriceModal(roomId, dateStr, roomNumber, currentPrice, priceId, note, bookingId, guestName, source) {
     const hasPrice = currentPrice !== null && currentPrice > 0;
+    const hasBooking = bookingId !== null && bookingId !== 'null';
     document.getElementById('modalTitle').textContent = 
         `💰 每日价格 - ${escHtml(roomNumber)} (${dateStr})`;
 
     document.getElementById('modalBody').innerHTML = `
+        ${hasBooking ? `<div style="background:#eff6ff;border-radius:8px;padding:10px 14px;margin-bottom:14px;">
+            📋 <strong>预订 #${bookingId}</strong> — ${escHtml(guestName)} ${source ? '· ' + escHtml(source) : ''}
+            <br><small class="text-muted">可在预订管理中按 ID 搜索查看详情</small>
+        </div>` : ''}
         <form id="priceForm">
             <input type="hidden" id="priceRoomId" value="${roomId}">
             <input type="hidden" id="priceDate" value="${dateStr}">

@@ -26,18 +26,32 @@
                 <span class="nav-icon">📅</span>
                 <span>日历视图</span>
             </a>
-            <a href="{{ url_for('rooms_page') }}" class="nav-item {% if request.path == '/rooms' %}active{% endif %}">
-                <span class="nav-icon">🚪</span>
-                <span>房间管理</span>
-            </a>
-            <a href="{{ url_for('room_types_page') }}" class="nav-item {% if request.path == '/room-types' %}active{% endif %}">
-                <span class="nav-icon">🏠</span>
-                <span>房型管理</span>
-            </a>
-            <a href="{{ url_for('guests_page') }}" class="nav-item {% if request.path == '/guests' %}active{% endif %}">
-                <span class="nav-icon">👤</span>
-                <span>客人管理</span>
-            </a>
+            <!-- 基础信息（可折叠） -->
+            <div class="nav-group {% if request.path in ('/room-types','/rooms','/guests','/booking-sources') %}open{% endif %}" id="navGroupBase">
+                <div class="nav-item nav-group-toggle" onclick="document.getElementById('navGroupBase').classList.toggle('open')">
+                    <span class="nav-icon">📂</span>
+                    <span>基础信息</span>
+                    <span class="nav-arrow">▾</span>
+                </div>
+                <div class="nav-sub">
+                    <a href="{{ url_for('room_types_page') }}" class="nav-item nav-sub-item {% if request.path == '/room-types' %}active{% endif %}">
+                        <span class="nav-icon">🏠</span>
+                        <span>房型管理</span>
+                    </a>
+                    <a href="{{ url_for('rooms_page') }}" class="nav-item nav-sub-item {% if request.path == '/rooms' %}active{% endif %}">
+                        <span class="nav-icon">🚪</span>
+                        <span>房间管理</span>
+                    </a>
+                    <a href="{{ url_for('guests_page') }}" class="nav-item nav-sub-item {% if request.path == '/guests' %}active{% endif %}">
+                        <span class="nav-icon">👤</span>
+                        <span>客人管理</span>
+                    </a>
+                    <a href="{{ url_for('booking_sources_page') }}" class="nav-item nav-sub-item {% if request.path == '/booking-sources' %}active{% endif %}">
+                        <span class="nav-icon">🏷️</span>
+                        <span>预订来源</span>
+                    </a>
+                </div>
+            </div>
             <a href="{{ url_for('logs_page') }}" class="nav-item {% if request.path == '/logs' %}active{% endif %}">
                 <span class="nav-icon">📝</span>
                 <span>系统日志</span>
