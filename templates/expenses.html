@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}支出管理 - 民宿房间管理系统{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>💸 支出管理</h1>
+    <button class="btn btn-primary" onclick="showExpenseForm()">+ 新增支出</button>
+</div>
+
+<!-- 支出类别管理 -->
+<div class="card" style="margin-bottom:12px;">
+    <div class="card-header">
+        <h3>🏷️ 支出类别</h3>
+        <button class="btn btn-sm btn-outline" onclick="showCategoryForm()">+ 新增类别</button>
+    </div>
+    <div class="card-body" id="categoriesList" style="display:flex;flex-wrap:wrap;gap:8px;">
+        加载中...
+    </div>
+</div>
+
+<!-- 支出列表 -->
+<div class="card">
+    <div class="card-header">
+        <div class="filter-bar">
+            <input type="text" id="searchKeyword" placeholder="🔍 搜索备注、类别..." oninput="loadExpenses()" />
+            <input type="date" id="filterDateFrom" onchange="loadExpenses()" />
+            <input type="date" id="filterDateTo" onchange="loadExpenses()" />
+            <select id="filterRoom" onchange="loadExpenses()"><option value="">全部房间</option></select>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-container">
+            <table class="table">
+                <thead><tr><th>日期</th><th>类别</th><th>金额</th><th>房间</th><th>备注</th><th>操作</th></tr></thead>
+                <tbody id="expenseTableBody"><tr><td colspan="6" class="text-center text-muted">加载中...</td></tr></tbody>
+            </table>
+        </div>
+        <div class="pagination" id="expensePagination"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+let categoriesList = [];
+let roomsList = [];
+
+document.addEventListener('DOMContentLoaded', async () => {
+    const [cRes, rRes] = await Promise.all([
+        fetch('/api/expense-categories'), fetch('/api/rooms?page=1&keyword=')
+    ]);
+    const cJson = await cRes.json();
+    const rJson = await rRes.json();
+    if (cJson.success) categoriesList = cJson.data;
+    if (rJson.success) { roomsList = rJson.data.items; roomsList.forEach(r => { document.getElementById('filterRoom').innerHTML += `<option value="${r.id}">${escHtml(r.room_number)}</option>`; }); }
+    renderCategories(); loadExpenses();
+});
+
+function renderCategories() {
+    let html = '';
+    categoriesList.forEach(c => {
+        html += `<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;background:#fff;border:1px solid var(--gray-200);border-radius:20px;font-size:13px;">
+            <span style="width:10px;height:10px;border-radius:50%;background:${c.color};display:inline-block;"></span>
+            ${escHtml(c.name)}
+            <button class="btn btn-sm" style="padding:0 4px;font-size:10px;color:var(--gray-400);" onclick="editCategory(${c.id},'${escHtml(c.name)}','${c.color}')">✎</button>
+            <button class="btn btn-sm" style="padding:0 4px;font-size:10px;color:var(--danger);" onclick="deleteCategory(${c.id})">✕</button>
+        </span>`;
+    });
+    document.getElementById('categoriesList').innerHTML = html;
+}
+
+// ---- 支出列表 ----
+async function loadExpenses() {
+    const keyword = document.getElementById('searchKeyword').value;
+    const df = document.getElementById('filterDateFrom').value;
+    const dt = document.getElementById('filterDateTo').value;
+    const rid = document.getElementById('filterRoom').value;
+    const res = await fetch(`/api/expenses?keyword=${encodeURIComponent(keyword)}&date_from=${df}&date_to=${dt}&room_id=${rid}&page=${currentPage}`);
+    const json = await res.json();
+    if (!json.success) return;
+    const data = json.data;
+    const catColors = {};
+    categoriesList.forEach(c => catColors[c.name] = c.color);
+    let html = '';
+    if (data.items.length === 0) html = '<tr><td colspan="6" class="text-center text-muted">暂无支出</td></tr>';
+    else data.items.forEach(e => {
+        const room = roomsList.find(r => r.id === e.room_id);
+        html += `<tr><td>${e.date}</td>
+            <td><span class="badge" style="background:${catColors[e.category]||'#6b7280'};color:#fff;">${escHtml(e.category||'-')}</span></td>
+            <td><strong style="color:var(--danger);">-¥${e.amount.toFixed(2)}</strong></td>
+            <td>${room ? escHtml(room.room_number) : '-'}</td>
+            <td>${escHtml(e.note||'')}</td>
+            <td class="action-cell">
+                <button class="btn btn-sm btn-outline" onclick="editExpense(${e.id})">编辑</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteExpense(${e.id})">删除</button>
+            </td></tr>`;
+    });
+    document.getElementById('expenseTableBody').innerHTML = html;
+    renderPagination('expensePagination', data, () => { currentPage = arguments[0] || currentPage; loadExpenses(); });
+}
+
+function showExpenseForm(data=null) {
+    const isEdit = data !== null;
+    document.getElementById('modalTitle').textContent = isEdit ? '编辑支出' : '新增支出';
+    const catOpts = categoriesList.map(c => `<option value="${escHtml(c.name)}" ${data && data.category === c.name ? 'selected' : ''}>${escHtml(c.name)}</option>`).join('');
+    const roomOpts = '<option value="">不限房间</option>' + roomsList.map(r => `<option value="${r.id}" ${data && data.room_id === r.id ? 'selected' : ''}>${escHtml(r.room_number)}</option>`).join('');
+    document.getElementById('modalBody').innerHTML = `
+        <form id="expenseForm"><input type="hidden" id="expenseId" value="${data?data.id:''}">
+            <div class="form-row">
+                <div class="form-group"><label>日期 <span class="required">*</span></label><input type="date" id="expenseDate" class="form-control" value="${data?data.date:new Date().toISOString().slice(0,10)}" required></div>
+                <div class="form-group"><label>类别 <span class="required">*</span></label><select id="expenseCategory" class="form-control">${catOpts}</select></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>金额 <span class="required">*</span></label><input type="number" id="expenseAmount" class="form-control" step="0.01" value="${data?data.amount:''}" required></div>
+                <div class="form-group"><label>房间</label><select id="expenseRoom" class="form-control">${roomOpts}</select></div>
+            </div>
+            <div class="form-group"><label>备注</label><input type="text" id="expenseNote" class="form-control" value="${data?escHtml(data.note||''):''}"></div>
+        </form>`;
+    document.getElementById('modalFooter').innerHTML = `<button class="btn btn-outline" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="saveExpense()">${isEdit?'保存':'新增'}</button>`;
+    openModal();
+}
+
+async function saveExpense() {
+    const id = document.getElementById('expenseId').value;
+    const data = { date: document.getElementById('expenseDate').value, category: document.getElementById('expenseCategory').value, amount: parseFloat(document.getElementById('expenseAmount').value)||0, room_id: parseInt(document.getElementById('expenseRoom').value)||null, note: document.getElementById('expenseNote').value.trim() };
+    const url = id ? `/api/expenses/${id}` : '/api/expenses';
+    const res = await fetch(url, { method: id?'PUT':'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+    const json = await res.json();
+    if (json.success) { closeModal(); loadExpenses(); showToast(id?'已更新':'已新增','success'); }
+    else showToast(json.error||'失败','error');
+}
+
+async function editExpense(id) {
+    const res = await fetch('/api/expenses?page=1&keyword=');
+    const json = await res.json();
+    if (json.success) { const e = json.data.items.find(x => x.id === id); if (e) showExpenseForm(e); }
+}
+
+async function deleteExpense(id) {
+    if (!confirm('确定删除？')) return;
+    const res = await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (json.success) { loadExpenses(); showToast('已删除','success'); }
+    else showToast(json.error||'失败','error');
+}
+
+// ---- 类别管理 ----
+function showCategoryForm(data=null) {
+    const isEdit = data !== null;
+    document.getElementById('modalTitle').textContent = isEdit ? '编辑类别' : '新增类别';
+    document.getElementById('modalBody').innerHTML = `
+        <form><input type="hidden" id="catId" value="${data?data.id:''}">
+            <div class="form-row">
+                <div class="form-group"><label>名称</label><input type="text" id="catName" class="form-control" value="${data?escHtml(data.name):''}" required></div>
+                <div class="form-group"><label>颜色</label><input type="color" id="catColor" class="form-control" value="${data?data.color:'#ef4444'}" style="height:40px;width:60px;padding:2px;"></div>
+            </div>
+        </form>`;
+    document.getElementById('modalFooter').innerHTML = `<button class="btn btn-outline" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="saveCategory()">${isEdit?'保存':'新增'}</button>`;
+    openModal();
+}
+
+async function saveCategory() {
+    const id = document.getElementById('catId').value;
+    const data = { name: document.getElementById('catName').value.trim(), color: document.getElementById('catColor').value };
+    const url = id ? `/api/expense-categories/${id}` : '/api/expense-categories';
+    const res = await fetch(url, { method: id?'PUT':'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+    const json = await res.json();
+    if (json.success) { closeModal(); location.reload(); }
+    else showToast(json.error||'失败','error');
+}
+
+function editCategory(id, name, color) { showCategoryForm({id, name, color}); }
+async function deleteCategory(id) { if (!confirm('确定删除？')) return; const res = await fetch(`/api/expense-categories/${id}`, { method: 'DELETE' }); if ((await res.json()).success) location.reload(); }
+</script>
+{% endblock %}

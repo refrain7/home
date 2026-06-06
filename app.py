@@ -117,6 +117,18 @@ def booking_sources_page():
     return render_template('booking_sources.html')
 
 
+@app.route('/holidays')
+def holidays_page():
+    """节假日管理页面"""
+    return render_template('holidays.html')
+
+
+@app.route('/expenses')
+def expenses_page():
+    """支出管理页面"""
+    return render_template('expenses.html')
+
+
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
     """访问上传的文件"""
@@ -821,110 +833,137 @@ def api_search():
 
 @app.route('/api/statistics')
 def api_statistics():
-    """获取统计数据：收入、入住率按年/月/周"""
-    mode = request.args.get('mode', 'monthly')  # yearly, monthly, weekly
-    year = int(request.args.get('year', datetime.now().year))
-    month = int(request.args.get('month', 0))  # 仅 weekly 模式用
+    """健壮的统计分析：收支净利润 + 入住率，支持时间范围和房间筛选"""
+    mode = request.args.get('mode', 'monthly')
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+    room_ids_str = request.args.get('room_ids', '')
 
     daily_prices = DataManager.read_json(DAILY_PRICES_FILE, [])
     extra_incomes = DataManager.read_json(EXTRA_INCOME_FILE, [])
-    bookings = DataManager.read_json(BOOKINGS_FILE, [])
+    expenses = DataManager.read_json(EXPENSES_FILE, [])
     rooms = DataManager.read_json(ROOMS_FILE, [])
+
+    # 房间筛选（支持多选，逗号分隔）
+    if room_ids_str:
+        room_ids = set(room_ids_str.split(','))
+        daily_prices = [p for p in daily_prices if str(p.get('room_id')) in room_ids]
+        expenses = [e for e in expenses if str(e.get('room_id')) in room_ids]
+        rooms = [r for r in rooms if str(r.get('id')) in room_ids]
     room_count = len(rooms)
 
-    labels = []
-    income_data = []
-    occupancy_data = []
+    # 时间范围
+    df = parse_date(date_from) if date_from else None
+    dt = parse_date(date_to) if date_to else None
 
-    if mode == 'yearly':
-        # 按年汇总：展示每年的数据
-        for y in range(year - 4, year + 1):
-            labels.append(str(y))
-            y_str = str(y)
-            income = sum(float(p.get('price', 0)) for p in daily_prices
-                        if p.get('date', '').startswith(y_str))
-            income += sum(float(e.get('amount', 0)) for e in extra_incomes
-                         if e.get('date', '').startswith(y_str))
-            income_data.append(round(income, 2))
+    def _in_range(d):
+        if df and d < df.strftime('%Y-%m-%d'): return False
+        if dt and d > dt.strftime('%Y-%m-%d'): return False
+        return True
 
-            # 入住率 = 有价格的天数 / (房间数 × 365)
-            priced_days = sum(1 for p in daily_prices
-                            if p.get('date', '').startswith(y_str) and p.get('price', 0) > 0)
-            total_possible = room_count * 365 if room_count > 0 else 1
-            occupancy_data.append(round(priced_days / total_possible * 100, 1))
+    def _sum_prices(match=None):
+        return sum(float(p.get('price', 0)) for p in daily_prices if _in_range(p.get('date', '')) and (not match or match(p)))
 
-    elif mode == 'monthly':
-        # 按年-月汇总
-        for m in range(1, 13):
-            labels.append(f'{m}月')
-            ym = f'{year}-{m:02d}'
-            income = sum(float(p.get('price', 0)) for p in daily_prices
-                        if p.get('date', '').startswith(ym))
-            income += sum(float(e.get('amount', 0)) for e in extra_incomes
-                         if e.get('date', '').startswith(ym))
-            income_data.append(round(income, 2))
+    def _sum_extra(match=None):
+        return sum(float(e.get('amount', 0)) for e in extra_incomes if _in_range(e.get('date', '')) and (not match or match(e)))
 
-            # 入住率 = 当月有价格的天数 / (房间数 × 当月天数)
-            days_in_month = [31, 28 + (1 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 0),
-                            31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1]
-            priced_days = sum(1 for p in daily_prices
-                            if p.get('date', '').startswith(ym) and p.get('price', 0) > 0)
-            total_possible = room_count * days_in_month if room_count > 0 else 1
-            occupancy_data.append(round(priced_days / total_possible * 100, 1))
+    def _sum_expenses(match=None):
+        return sum(float(e.get('amount', 0)) for e in expenses if _in_range(e.get('date', '')) and (not match or match(e)))
+
+    def _days_in_month(y, m):
+        return [31,28+(1 if y%4==0 and (y%100!=0 or y%400==0) else 0),31,30,31,30,31,31,30,31,30,31][m-1]
+
+    # 自动确定时间范围
+    now = datetime.now()
+    if not df:
+        df = datetime(now.year, 1, 1) if mode == 'yearly' else datetime(now.year, now.month, 1)
+    if not dt and mode == 'yearly':
+        dt = datetime(now.year, 12, 31)
+    elif not dt and mode == 'monthly':
+        dt = datetime(now.year, now.month, _days_in_month(now.year, now.month))
+
+    labels, income_data, expense_data, occupancy_data = [], [], [], []
+
+    if mode in ('yearly', 'monthly'):
+        cur = datetime(df.year, df.month, 1)
+        end = dt
+        step = timedelta(days=365) if mode == 'yearly' else timedelta(days=32)
+        while cur <= end:
+            if mode == 'yearly':
+                labels.append(str(cur.year))
+                ym = str(cur.year)
+                income_data.append(round(_sum_prices(lambda p: p['date'].startswith(ym)) + _sum_extra(lambda e: e['date'].startswith(ym)), 2))
+                expense_data.append(round(_sum_expenses(lambda e: e['date'].startswith(ym)), 2))
+                priced_days = sum(1 for p in daily_prices if p['date'].startswith(ym) and p.get('price',0)>0)
+                total = room_count * (366 if cur.year%4==0 else 365) or 1
+                occupancy_data.append(round(priced_days/total*100,1))
+                cur = datetime(cur.year+1, 1, 1)
+            else:
+                labels.append(f'{cur.year}-{cur.month:02d}')
+                ym = cur.strftime('%Y-%m')
+                income_data.append(round(_sum_prices(lambda p: p['date'].startswith(ym)) + _sum_extra(lambda e: e['date'].startswith(ym)), 2))
+                expense_data.append(round(_sum_expenses(lambda e: e['date'].startswith(ym)), 2))
+                dim = _days_in_month(cur.year, cur.month)
+                priced_days = sum(1 for p in daily_prices if p['date'].startswith(ym) and p.get('price',0)>0)
+                total = room_count * dim or 1
+                occupancy_data.append(round(priced_days/total*100,1))
+                cur = datetime(cur.year + (cur.month//12), (cur.month%12)+1, 1)
 
     elif mode == 'weekly':
-        # 按周汇总（指定月的每周）
-        if month <= 0:
-            month = datetime.now().month
-        # 计算该月第一天和最后一天
-        days_in_month = [31, 28 + (1 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 0),
-                        31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1]
-        first_date = parse_date(f'{year}-{month:02d}-01')
-        last_date = parse_date(f'{year}-{month:02d}-{days_in_month}')
-        # 从第一个周一开始分周
-        current_week_start = first_date
-        week_num = 1
-        while current_week_start <= last_date:
-            week_end = min(current_week_start + timedelta(days=6), last_date)
-            labels.append(f'第{week_num}周')
-            week_num += 1
-
-            # 收入
-            income = 0
-            d = current_week_start
-            while d <= week_end:
+        if not df: df = datetime(now.year, now.month, 1)
+        dim = _days_in_month(df.year, df.month)
+        end = dt or datetime(df.year, df.month, dim)
+        cur = df
+        wn = 1
+        while cur <= end:
+            we = min(cur + timedelta(days=6), end)
+            labels.append(f'W{wn}')
+            wn += 1
+            income_data.append(round(_sum_prices(lambda p: cur.strftime('%Y-%m-%d') <= p['date'] <= we.strftime('%Y-%m-%d')) + _sum_extra(lambda e: cur.strftime('%Y-%m-%d') <= e['date'] <= we.strftime('%Y-%m-%d')), 2))
+            expense_data.append(round(_sum_expenses(lambda e: cur.strftime('%Y-%m-%d') <= e['date'] <= we.strftime('%Y-%m-%d')), 2))
+            pd_cnt, wd = 0, 0
+            d = cur
+            while d <= we:
                 ds = d.strftime('%Y-%m-%d')
-                income += sum(float(p.get('price', 0)) for p in daily_prices
-                            if p.get('date') == ds)
-                income += sum(float(e.get('amount', 0)) for e in extra_incomes
-                            if e.get('date') == ds)
-                d += timedelta(days=1)
-            income_data.append(round(income, 2))
+                pd_cnt += sum(1 for p in daily_prices if p['date']==ds and p.get('price',0)>0)
+                wd += 1; d += timedelta(days=1)
+            occupancy_data.append(round(pd_cnt/(room_count*wd)*100,1) if room_count*wd else 0)
+            cur += timedelta(days=7)
 
-            # 入住率 = 本周有价格的天数 / (房间数 × 本周天数)
-            priced_days = 0
-            days_in_week = 0
-            d = current_week_start
-            while d <= week_end:
-                ds = d.strftime('%Y-%m-%d')
-                priced_days += sum(1 for p in daily_prices
-                                 if p.get('date') == ds and p.get('price', 0) > 0)
-                days_in_week += 1
-                d += timedelta(days=1)
-            total_possible = room_count * days_in_week if room_count > 0 else 1
-            occupancy_data.append(round(priced_days / total_possible * 100, 1))
+    elif mode == 'rooms':
+        for room in rooms:
+            labels.append(room.get('room_number', f'R{room["id"]}'))
+            rm = str(room['id'])
+            income_data.append(round(sum(float(p.get('price',0)) for p in daily_prices if str(p.get('room_id'))==rm and _in_range(p.get('date',''))), 2))
+            expense_data.append(round(sum(float(e.get('amount',0)) for e in expenses if str(e.get('room_id'))==rm and _in_range(e.get('date',''))), 2))
+            pd_cnt = sum(1 for p in daily_prices if str(p.get('room_id'))==rm and _in_range(p.get('date','')) and p.get('price',0)>0)
+            total_days = (dt - df).days + 1 if df and dt else 30
+            occupancy_data.append(round(pd_cnt/total_days*100,1) if total_days else 0)
 
-            current_week_start += timedelta(days=7)
+    elif mode == 'daily':
+        if df and dt:
+            cur = df
+            while cur <= dt:
+                ds = cur.strftime('%Y-%m-%d')
+                labels.append(f'{cur.month}/{cur.day}')
+                income_data.append(round(_sum_prices(lambda p: p['date']==ds) + _sum_extra(lambda e: e['date']==ds), 2))
+                expense_data.append(round(_sum_expenses(lambda e: e['date']==ds), 2))
+                occupancy_data.append(0)
+                cur += timedelta(days=1)
 
-    return jsonify({
-        'success': True,
-        'data': {
-            'mode': mode,
-            'labels': labels,
-            'income': income_data,
-            'occupancy': occupancy_data
-        }
-    })
+    # 总计
+    total_income = sum(income_data)
+    total_expense = sum(expense_data)
+    total_profit = total_income - total_expense
+    avg_occupancy = round(sum(occupancy_data)/len(occupancy_data),1) if occupancy_data else 0
+
+    return jsonify({'success': True, 'data': {
+        'mode': mode, 'labels': labels, 'income': income_data, 'expense': expense_data,
+        'occupancy': occupancy_data, 'rooms': rooms,
+        'total_income': round(total_income,2), 'total_expense': round(total_expense,2),
+        'total_profit': round(total_profit,2), 'avg_occupancy': avg_occupancy,
+        'date_from': df.strftime('%Y-%m-%d') if df else '', 'date_to': dt.strftime('%Y-%m-%d') if dt else ''
+    }})
 
 
 # ==================== API：日历数据 ====================
@@ -982,6 +1021,20 @@ def api_calendar_data():
             key = f"{p.get('room_id', 0)}_{p.get('date', '')}"
             month_prices[key] = p
 
+    # 节假日
+    holidays = DataManager.read_json(HOLIDAYS_FILE, [])
+    month_holidays = {}
+    for h in holidays:
+        h_date = h.get('date', '')
+        if h_date.startswith(f'{year}-{month:02d}'):
+            month_holidays[h_date] = {'name': h.get('name', ''), 'type': 'holiday'}
+            # 前一天标记为节前日
+            h_dt = parse_date(h_date)
+            if h_dt:
+                eve = (h_dt - timedelta(days=1)).strftime('%Y-%m-%d')
+                if eve.startswith(f'{year}-{month:02d}') and eve not in month_holidays:
+                    month_holidays[eve] = {'name': h.get('name', '') + '前', 'type': 'holiday_eve'}
+
     return jsonify({
         'success': True,
         'data': {
@@ -990,7 +1043,8 @@ def api_calendar_data():
             'rooms': rooms,
             'events': events,
             'prices': month_prices,
-            'sources': sources
+            'sources': sources,
+            'holidays': month_holidays
         }
     })
 
@@ -1421,6 +1475,131 @@ def api_booking_source_detail(src_id):
     elif request.method == 'DELETE':
         if DataManager.delete_by_id(sources, src_id):
             DataManager.write_json(BOOKING_SOURCES_FILE, sources)
+            return jsonify({'success': True})
+        return jsonify({'success': False, 'error': '不存在'}), 404
+
+
+# ==================== API：节假日管理 ====================
+
+@app.route('/api/holidays', methods=['GET', 'POST'])
+def api_holidays():
+    if request.method == 'GET':
+        holidays = DataManager.read_json(HOLIDAYS_FILE, [])
+        holidays.sort(key=lambda x: x.get('date', ''))
+        return jsonify({'success': True, 'data': holidays})
+
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
+            holidays = DataManager.read_json(HOLIDAYS_FILE, [])
+            new_h = {
+                'id': DataManager.generate_id(holidays),
+                'date': data.get('date', '').strip(),
+                'name': data.get('name', '').strip(),
+            }
+            holidays.append(new_h)
+            DataManager.write_json(HOLIDAYS_FILE, holidays)
+            return jsonify({'success': True, 'data': new_h})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+
+
+@app.route('/api/holidays/<int:h_id>', methods=['DELETE'])
+def api_holiday_delete(h_id):
+    holidays = DataManager.read_json(HOLIDAYS_FILE, [])
+    if DataManager.delete_by_id(holidays, h_id):
+        DataManager.write_json(HOLIDAYS_FILE, holidays)
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'error': '不存在'}), 404
+
+
+# ==================== API：支出类别管理 ====================
+
+@app.route('/api/expense-categories', methods=['GET', 'POST'])
+def api_expense_categories():
+    if request.method == 'GET':
+        cats = DataManager.read_json(EXPENSE_CATEGORIES_FILE, [])
+        return jsonify({'success': True, 'data': cats})
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
+            cats = DataManager.read_json(EXPENSE_CATEGORIES_FILE, [])
+            new_c = {'id': DataManager.generate_id(cats), 'name': data.get('name', '').strip(), 'color': data.get('color', '#6b7280')}
+            cats.append(new_c)
+            DataManager.write_json(EXPENSE_CATEGORIES_FILE, cats)
+            return jsonify({'success': True, 'data': new_c})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+
+
+@app.route('/api/expense-categories/<int:c_id>', methods=['PUT', 'DELETE'])
+def api_expense_category_detail(c_id):
+    cats = DataManager.read_json(EXPENSE_CATEGORIES_FILE, [])
+    if request.method == 'PUT':
+        data = request.get_json()
+        if DataManager.update_by_id(cats, c_id, {'name': data.get('name', '').strip(), 'color': data.get('color', '#6b7280')}):
+            DataManager.write_json(EXPENSE_CATEGORIES_FILE, cats)
+            return jsonify({'success': True})
+        return jsonify({'success': False, 'error': '不存在'}), 404
+    elif request.method == 'DELETE':
+        if DataManager.delete_by_id(cats, c_id):
+            DataManager.write_json(EXPENSE_CATEGORIES_FILE, cats)
+            return jsonify({'success': True})
+        return jsonify({'success': False, 'error': '不存在'}), 404
+
+
+# ==================== API：支出管理 ====================
+
+@app.route('/api/expenses', methods=['GET', 'POST'])
+def api_expenses():
+    if request.method == 'GET':
+        page = int(request.args.get('page', 1))
+        keyword = request.args.get('keyword', '')
+        room_id = request.args.get('room_id', '')
+        date_from = request.args.get('date_from', '')
+        date_to = request.args.get('date_to', '')
+        expenses = DataManager.read_json(EXPENSES_FILE, [])
+        if room_id:
+            expenses = [e for e in expenses if str(e.get('room_id')) == room_id]
+        if date_from:
+            expenses = [e for e in expenses if e.get('date', '') >= date_from]
+        if date_to:
+            expenses = [e for e in expenses if e.get('date', '') <= date_to]
+        if keyword:
+            expenses = [e for e in expenses if keyword.lower() in e.get('note', '').lower() or keyword.lower() in e.get('category', '').lower()]
+        result = DataManager.query(expenses, sort_key='date', sort_reverse=True, page=page, page_size=PAGE_SIZE)
+        return jsonify({'success': True, 'data': result})
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
+            expenses = DataManager.read_json(EXPENSES_FILE, [])
+            new_e = {
+                'id': DataManager.generate_id(expenses), 'date': data.get('date', get_today_str()),
+                'amount': float(data.get('amount', 0)), 'category': data.get('category', '').strip(),
+                'room_id': int(data.get('room_id', 0)) or None, 'note': data.get('note', '').strip(),
+                'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+            expenses.append(new_e)
+            DataManager.write_json(EXPENSES_FILE, expenses)
+            SystemLogger.info('新增支出', f'{new_e["date"]}: ¥{new_e["amount"]} - {new_e["category"]}')
+            return jsonify({'success': True, 'data': new_e})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+
+
+@app.route('/api/expenses/<int:e_id>', methods=['PUT', 'DELETE'])
+def api_expense_detail(e_id):
+    expenses = DataManager.read_json(EXPENSES_FILE, [])
+    if request.method == 'PUT':
+        data = request.get_json()
+        updates = {'date': data.get('date', ''), 'amount': float(data.get('amount', 0)), 'category': data.get('category', ''), 'room_id': int(data.get('room_id', 0)) or None, 'note': data.get('note', '')}
+        if DataManager.update_by_id(expenses, e_id, updates):
+            DataManager.write_json(EXPENSES_FILE, expenses)
+            return jsonify({'success': True})
+        return jsonify({'success': False, 'error': '不存在'}), 404
+    elif request.method == 'DELETE':
+        if DataManager.delete_by_id(expenses, e_id):
+            DataManager.write_json(EXPENSES_FILE, expenses)
             return jsonify({'success': True})
         return jsonify({'success': False, 'error': '不存在'}), 404
 
