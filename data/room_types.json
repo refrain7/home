@@ -1,17 +1,1 @@
-[
-  {
-    "id": 1,
-    "name": "aa",
-    "description": "",
-    "base_price": 0.0,
-    "weekend_price": null,
-    "holiday_price": null,
-    "capacity": 2,
-    "area": "",
-    "bed_type": "",
-    "amenities": "",
-    "images": [],
-    "created_at": "2026-06-07 20:25:30",
-    "updated_at": "2026-06-07 20:25:30"
-  }
-]
+[]
