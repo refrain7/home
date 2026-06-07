@@ -134,5 +134,61 @@
     "details": "端口: 8080",
     "user": "系统",
     "level": "INFO"
+  },
+  {
+    "id": 18,
+    "timestamp": "2026-06-07 20:24:49",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 19,
+    "timestamp": "2026-06-07 20:24:51",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 20,
+    "timestamp": "2026-06-07 20:25:20",
+    "action": "系统启动",
+    "details": "端口: 8080",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 21,
+    "timestamp": "2026-06-07 20:25:30",
+    "action": "新增房型",
+    "details": "房型: aa",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 22,
+    "timestamp": "2026-06-07 20:25:33",
+    "action": "新增房间",
+    "details": "房间号: 1",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 23,
+    "timestamp": "2026-06-07 20:25:37",
+    "action": "新增房间",
+    "details": "房间号: 2",
+    "user": "系统",
+    "level": "INFO"
+  },
+  {
+    "id": 24,
+    "timestamp": "2026-06-07 20:25:39",
+    "action": "新增房间",
+    "details": "房间号: 3",
+    "user": "系统",
+    "level": "INFO"
   }
 ]

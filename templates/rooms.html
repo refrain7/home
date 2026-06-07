@@ -4,7 +4,11 @@
 {% block content %}
 <div class="page-header">
     <h1>🚪 房间管理</h1>
-    <button class="btn btn-primary" onclick="showRoomForm()">+ 新增房间</button>
+    <div style="display:flex;gap:8px;">
+        <button class="btn btn-outline btn-sm" onclick="moveSort('up')" title="上移选中">↑</button>
+        <button class="btn btn-outline btn-sm" onclick="moveSort('down')" title="下移选中">↓</button>
+        <button class="btn btn-primary" onclick="showRoomForm()">+ 新增房间</button>
+    </div>
 </div>
 
 <div class="card">
@@ -80,6 +84,7 @@ async function loadRooms() {
                         <div class="room-info"><span>备注:</span> ${escHtml(r.notes || '-')}</div>
                     </div>
                     <div class="room-card-footer">
+                        <input type="radio" name="roomSort" value="${r.id}" style="margin-right:4px;" title="选中后点击↑↓排序" />
                         <button class="btn btn-sm btn-outline" onclick="editRoom(${r.id})">编辑</button>
                         <button class="btn btn-sm btn-outline" onclick="quickStatus(${r.id}, '${r.status}')">状态</button>
                         <button class="btn btn-sm btn-danger" onclick="deleteRoom(${r.id}, '${escHtml(r.room_number)}')">删除</button>
@@ -228,6 +233,24 @@ async function deleteRoom(id, number) {
     const json = await res.json();
     if (json.success) { loadRooms(); showToast('房间已删除', 'success'); }
     else { showToast(json.error || '删除失败', 'error'); }
+}
+
+async function moveSort(dir) {
+    const selected = document.querySelector('input[name="roomSort"]:checked');
+    if (!selected) { showToast('请先选中一个房间', 'warning'); return; }
+    const currentId = parseInt(selected.value);
+    // 获取当前显示的房间列表
+    const cards = [...document.querySelectorAll('.room-card')];
+    const ids = cards.map(c => parseInt(c.querySelector('input[name="roomSort"]').value));
+    const idx = ids.indexOf(currentId);
+    if (idx < 0) return;
+    if (dir === 'up' && idx > 0) { [ids[idx], ids[idx-1]] = [ids[idx-1], ids[idx]]; }
+    else if (dir === 'down' && idx < ids.length - 1) { [ids[idx], ids[idx+1]] = [ids[idx+1], ids[idx]]; }
+    else return;
+    const res = await fetch('/api/rooms/sort', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ room_ids: ids }) });
+    const json = await res.json();
+    if (json.success) { loadRooms(); showToast('排序已更新', 'success'); }
+    else { showToast(json.error || '排序失败', 'error'); }
 }
 </script>
 {% endblock %}

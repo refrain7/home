@@ -354,7 +354,7 @@ def api_rooms():
         if floor:
             rooms = [r for r in rooms if str(r.get('floor')) == floor]
 
-        result = DataManager.query(rooms, sort_key='room_number',
+        result = DataManager.query(rooms, sort_key='sort_order',
                                    page=page, page_size=PAGE_SIZE)
 
         # 关联房型名称
@@ -386,6 +386,7 @@ def api_rooms():
                 'floor': data.get('floor', '').strip(),
                 'status': data.get('status', 'available'),
                 'notes': data.get('notes', '').strip(),
+                'sort_order': len(rooms),
                 'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             }
@@ -976,6 +977,7 @@ def api_calendar_data():
 
     bookings = DataManager.read_json(BOOKINGS_FILE, [])
     rooms = DataManager.read_json(ROOMS_FILE, [])
+    rooms.sort(key=lambda r: r.get('sort_order', 0))
     guests = DataManager.read_json(GUESTS_FILE, [])
 
     guest_map = {g['id']: g for g in guests}
@@ -1767,6 +1769,21 @@ def api_batch_room_status():
         SystemLogger.info('批量更新房间状态',
                           f'更新 {count} 个房间状态为: {ROOM_STATUS.get(new_status)}')
         return jsonify({'success': True, 'message': f'成功更新 {count} 个房间'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+
+@app.route('/api/rooms/sort', methods=['POST'])
+def api_rooms_sort():
+    """更新房间排序"""
+    try:
+        data = request.get_json()
+        room_ids = data.get('room_ids', [])
+        rooms = DataManager.read_json(ROOMS_FILE, [])
+        for i, rid in enumerate(room_ids):
+            DataManager.update_by_id(rooms, int(rid), {'sort_order': i})
+        DataManager.write_json(ROOMS_FILE, rooms)
+        return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
 
