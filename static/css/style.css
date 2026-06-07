@@ -842,6 +842,18 @@ textarea.form-control {
     gap: 6px;
 }
 
+.room-card[draggable] {
+    cursor: grab;
+}
+
+.room-card[draggable]:active {
+    cursor: grabbing;
+}
+
+.drag-handle {
+    user-select: none;
+}
+
 /* ==================== 列表项 ==================== */
 .list-item {
     padding: 10px 0;
